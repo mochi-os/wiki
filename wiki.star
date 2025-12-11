@@ -9,6 +9,7 @@ def database_create(db):
     db.exec("create table tags (page text not null references pages(id), tag text not null, primary key (page, tag))")
     db.exec("create table redirects (source text primary key, target text not null, created integer not null)")
     db.exec("create table settings (name text primary key, value text not null)")
+    db.exec("create table subscribers (id text primary key, name text not null default '', subscribed integer not null)")
     db.exec("create index pages_updated on pages(updated)")
     db.exec("create index pages_author on pages(author)")
     db.exec("create index revisions_page on revisions(page)")
@@ -22,6 +23,18 @@ def get_setting(name, default):
     if row:
         return row["value"]
     return default
+
+# Helper: Broadcast event to all subscribers
+def broadcast_event(a, event, data):
+    wiki_entity = a.input("wiki")
+    if not wiki_entity:
+        return
+    subscribers = mochi.db.query("select id from subscribers")
+    for sub in subscribers:
+        mochi.message.send(
+            {"from": wiki_entity, "to": sub["id"], "service": "wiki", "event": event},
+            data
+        )
 
 # Helper: Get page by slug, following redirects
 def get_page(slug):
@@ -50,7 +63,7 @@ def action_root(a):
 
 # View a page
 def action_page(a):
-    slug = a.param("page")
+    slug = a.input("page")
     if not slug:
         a.error(400, "Missing page parameter")
         return
@@ -84,7 +97,7 @@ def action_page_edit(a):
         a.error(401, "Not logged in")
         return
 
-    slug = a.param("page")
+    slug = a.input("page")
     if not slug:
         a.error(400, "Missing page parameter")
         return
@@ -114,6 +127,16 @@ def action_page_edit(a):
             mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ?, deleted = 0 where id = ?",
                 title, content, author, now, new_version, existing["id"])
             create_revision(existing["id"], title, content, author, new_version, comment)
+            # Send page/create event (restored page)
+            broadcast_event(a, "page/create", {
+                "id": existing["id"],
+                "page": slug,
+                "title": title,
+                "content": content,
+                "author": author,
+                "created": now,
+                "version": new_version
+            })
             a.json({"id": existing["id"], "slug": slug, "version": new_version, "created": False})
         else:
             # Update page
@@ -121,6 +144,16 @@ def action_page_edit(a):
             mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ? where id = ?",
                 title, content, author, now, new_version, existing["id"])
             create_revision(existing["id"], title, content, author, new_version, comment)
+            # Send page/update event
+            broadcast_event(a, "page/update", {
+                "id": existing["id"],
+                "page": slug,
+                "title": title,
+                "content": content,
+                "author": author,
+                "updated": now,
+                "version": new_version
+            })
             a.json({"id": existing["id"], "slug": slug, "version": new_version, "created": False})
     else:
         # Create new page
@@ -128,6 +161,16 @@ def action_page_edit(a):
         mochi.db.query("insert into pages (id, page, title, content, author, created, updated, version) values (?, ?, ?, ?, ?, ?, ?, 1)",
             page_id, slug, title, content, author, now, now)
         create_revision(page_id, title, content, author, 1, comment)
+        # Send page/create event
+        broadcast_event(a, "page/create", {
+            "id": page_id,
+            "page": slug,
+            "title": title,
+            "content": content,
+            "author": author,
+            "created": now,
+            "version": 1
+        })
         a.json({"id": page_id, "slug": slug, "version": 1, "created": True})
 
 # Create a new page (returns page slug for redirect)
@@ -168,11 +211,22 @@ def action_new(a):
         page_id, slug, title, content, author, now, now)
     create_revision(page_id, title, content, author, 1, "Initial creation")
 
+    # Send page/create event
+    broadcast_event(a, "page/create", {
+        "id": page_id,
+        "page": slug,
+        "title": title,
+        "content": content,
+        "author": author,
+        "created": now,
+        "version": 1
+    })
+
     a.json({"id": page_id, "slug": slug})
 
 # Page history (stub - to be implemented in Stage 3)
 def action_page_history(a):
-    slug = a.param("page")
+    slug = a.input("page")
     if not slug:
         a.error(400, "Missing page parameter")
         return
@@ -187,8 +241,8 @@ def action_page_history(a):
 
 # View a specific revision
 def action_page_revision(a):
-    slug = a.param("page")
-    version = a.param("version")
+    slug = a.input("page")
+    version = a.input("version")
 
     if not slug:
         a.error(400, "Missing page parameter")
@@ -228,7 +282,7 @@ def action_page_revert(a):
         a.error(401, "Not logged in")
         return
 
-    slug = a.param("page")
+    slug = a.input("page")
     version = a.input("version")
     comment = a.input("comment", "")
 
@@ -262,7 +316,48 @@ def action_page_revert(a):
         revision["title"], revision["content"], author, now, new_version, page["id"])
     create_revision(page["id"], revision["title"], revision["content"], author, new_version, comment)
 
+    # Send page/update event
+    broadcast_event(a, "page/update", {
+        "id": page["id"],
+        "page": slug,
+        "title": revision["title"],
+        "content": revision["content"],
+        "author": author,
+        "updated": now,
+        "version": new_version
+    })
+
     a.json({"slug": slug, "version": new_version, "reverted_from": int(version)})
+
+# Delete a page (soft delete)
+def action_page_delete(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    slug = a.input("page")
+    if not slug:
+        a.error(400, "Missing page parameter")
+        return
+
+    page = mochi.db.row("select * from pages where page = ? and deleted = 0", slug)
+    if not page:
+        a.error(404, "Page not found")
+        return
+
+    now = mochi.time.now()
+    new_version = page["version"] + 1
+
+    mochi.db.query("update pages set deleted = ?, version = ? where id = ?", now, new_version, page["id"])
+
+    # Send page/delete event
+    broadcast_event(a, "page/delete", {
+        "id": page["id"],
+        "deleted": now,
+        "version": new_version
+    })
+
+    a.json({"ok": True, "slug": slug})
 
 # Add a tag to a page
 def action_tag_add(a):
@@ -270,7 +365,7 @@ def action_tag_add(a):
         a.error(401, "Not logged in")
         return
 
-    slug = a.param("page")
+    slug = a.input("page")
     tag = a.input("tag")
 
     if not slug:
@@ -299,6 +394,13 @@ def action_tag_add(a):
         return
 
     mochi.db.query("insert into tags (page, tag) values (?, ?)", page["id"], tag)
+
+    # Send tag/add event
+    broadcast_event(a, "tag/add", {
+        "page": page["id"],
+        "tag": tag
+    })
+
     a.json({"ok": True, "added": True})
 
 # Remove a tag from a page
@@ -307,7 +409,7 @@ def action_tag_remove(a):
         a.error(401, "Not logged in")
         return
 
-    slug = a.param("page")
+    slug = a.input("page")
     tag = a.input("tag")
 
     if not slug:
@@ -326,6 +428,13 @@ def action_tag_remove(a):
         return
 
     mochi.db.query("delete from tags where page = ? and tag = ?", page["id"], tag)
+
+    # Send tag/remove event
+    broadcast_event(a, "tag/remove", {
+        "page": page["id"],
+        "tag": tag
+    })
+
     a.json({"ok": True})
 
 # List all tags in the wiki
@@ -335,7 +444,7 @@ def action_tags(a):
 
 # List pages with a specific tag
 def action_tag_pages(a):
-    tag = a.param("tag")
+    tag = a.input("tag")
 
     if not tag:
         a.error(400, "Missing tag parameter")
@@ -397,6 +506,14 @@ def action_redirect_set(a):
 
     now = mochi.time.now()
     mochi.db.query("replace into redirects (source, target, created) values (?, ?, ?)", source, target, now)
+
+    # Send redirect/set event
+    broadcast_event(a, "redirect/set", {
+        "source": source,
+        "target": target,
+        "created": now
+    })
+
     a.json({"ok": True})
 
 # Delete a redirect
@@ -413,6 +530,12 @@ def action_redirect_delete(a):
 
     source = source.lower().strip()
     mochi.db.query("delete from redirects where source = ?", source)
+
+    # Send redirect/delete event
+    broadcast_event(a, "redirect/delete", {
+        "source": source
+    })
+
     a.json({"ok": True})
 
 # List all redirects
@@ -420,41 +543,46 @@ def action_redirects(a):
     redirects = mochi.db.query("select source, target, created from redirects order by source")
     a.json({"redirects": redirects})
 
-# View/update wiki settings
+# View wiki settings
 def action_settings(a):
-    if a.method == "GET":
-        # Return all settings
-        rows = mochi.db.query("select name, value from settings")
-        settings = {}
-        for row in rows:
-            settings[row["name"]] = row["value"]
-        a.json({"settings": settings})
-    else:
-        # Update settings (POST)
-        if not a.user:
-            a.error(401, "Not logged in")
-            return
+    rows = mochi.db.query("select name, value from settings")
+    settings = {}
+    for row in rows:
+        settings[row["name"]] = row["value"]
+    a.json({"settings": settings})
 
-        # Get setting to update
-        name = a.input("name")
-        value = a.input("value")
+# Update a wiki setting
+def action_settings_set(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
 
-        if not name:
-            a.error(400, "Setting name is required")
-            return
+    name = a.input("name")
+    value = a.input("value")
 
-        if value == None:
-            a.error(400, "Setting value is required")
-            return
+    if not name:
+        a.error(400, "Setting name is required")
+        return
 
-        # Only allow known settings
-        known_settings = ["home"]
-        if name not in known_settings:
-            a.error(400, "Unknown setting: " + name)
-            return
+    if value == None:
+        a.error(400, "Setting value is required")
+        return
 
-        mochi.db.query("replace into settings (name, value) values (?, ?)", name, value)
-        a.json({"ok": True})
+    # Only allow known settings
+    known_settings = ["home"]
+    if name not in known_settings:
+        a.error(400, "Unknown setting: " + name)
+        return
+
+    mochi.db.query("replace into settings (name, value) values (?, ?)", name, value)
+
+    # Send setting/set event
+    broadcast_event(a, "setting/set", {
+        "name": name,
+        "value": value
+    })
+
+    a.json({"ok": True})
 
 # Search pages by title and content
 def action_search(a):
