@@ -22,7 +22,8 @@
 	],
 
 	"actions": {
-		"": {"file": "web/dist/index.html"},
+		"": {"function": "action_root"},
+		"-/app": {"file": "web/dist/index.html"},
 		"assets": {"files": "web/dist/assets"},
 		"images": {"files": "web/dist/images"},
 		"-/new": {"function": "action_new"},
@@ -36,7 +37,10 @@
 		":page/tag/add": {"function": "action_tag_add"},
 		":page/tag/remove": {"function": "action_tag_remove"},
 		"-/tags": {"function": "action_tags"},
-		"-/tag/:tag": {"function": "action_tag_pages"}
+		"-/tag/:tag": {"function": "action_tag_pages"},
+		"-/redirect/set": {"function": "action_redirect_set"},
+		"-/redirect/delete": {"function": "action_redirect_delete"},
+		"-/redirects": {"function": "action_redirects"}
 	},
 
 	"events": {

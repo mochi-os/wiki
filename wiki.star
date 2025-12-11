@@ -43,6 +43,11 @@ def create_revision(page_id, title, content, author, version, comment):
 
 # ACTIONS
 
+# Root action - redirect to home page
+def action_root(a):
+    home = get_setting("home", "home")
+    a.redirect(home)
+
 # View a page
 def action_page(a):
     slug = a.param("page")
@@ -348,12 +353,111 @@ def action_tag_pages(a):
 
     a.json({"tag": tag, "pages": pages})
 
+# Create or update a redirect
+def action_redirect_set(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    source = a.input("source")
+    target = a.input("target")
+
+    if not source:
+        a.error(400, "Source is required")
+        return
+
+    if not target:
+        a.error(400, "Target is required")
+        return
+
+    # Normalize slugs
+    source = source.lower().strip()
+    target = target.lower().strip()
+
+    if source == target:
+        a.error(400, "Source and target cannot be the same")
+        return
+
+    # Check if source is a reserved path
+    if source.startswith("-"):
+        a.error(400, "Cannot redirect reserved paths")
+        return
+
+    # Check if target page exists
+    target_page = mochi.db.row("select id from pages where page = ? and deleted = 0", target)
+    if not target_page:
+        a.error(400, "Target page does not exist")
+        return
+
+    # Check if source conflicts with an existing page
+    source_page = mochi.db.row("select id from pages where page = ? and deleted = 0", source)
+    if source_page:
+        a.error(400, "Cannot redirect: a page with this slug already exists")
+        return
+
+    now = mochi.time.now()
+    mochi.db.query("replace into redirects (source, target, created) values (?, ?, ?)", source, target, now)
+    a.json({"ok": True})
+
+# Delete a redirect
+def action_redirect_delete(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    source = a.input("source")
+
+    if not source:
+        a.error(400, "Source is required")
+        return
+
+    source = source.lower().strip()
+    mochi.db.query("delete from redirects where source = ?", source)
+    a.json({"ok": True})
+
+# List all redirects
+def action_redirects(a):
+    redirects = mochi.db.query("select source, target, created from redirects order by source")
+    a.json({"redirects": redirects})
+
+# View/update wiki settings
+def action_settings(a):
+    if a.method == "GET":
+        # Return all settings
+        rows = mochi.db.query("select name, value from settings")
+        settings = {}
+        for row in rows:
+            settings[row["name"]] = row["value"]
+        a.json({"settings": settings})
+    else:
+        # Update settings (POST)
+        if not a.user:
+            a.error(401, "Not logged in")
+            return
+
+        # Get setting to update
+        name = a.input("name")
+        value = a.input("value")
+
+        if not name:
+            a.error(400, "Setting name is required")
+            return
+
+        if value == None:
+            a.error(400, "Setting value is required")
+            return
+
+        # Only allow known settings
+        known_settings = ["home"]
+        if name not in known_settings:
+            a.error(400, "Unknown setting: " + name)
+            return
+
+        mochi.db.query("replace into settings (name, value) values (?, ?)", name, value)
+        a.json({"ok": True})
+
 # Search (stub - to be implemented in Stage 6)
 def action_search(a):
-    a.error(501, "Not implemented")
-
-# Settings (stub - to be implemented in Stage 5)
-def action_settings(a):
     a.error(501, "Not implemented")
 
 # Stub event handlers (to be implemented in later stages)
