@@ -180,6 +180,85 @@ def action_page_history(a):
     revisions = mochi.db.query("select id, title, author, created, version, comment from revisions where page = ? order by version desc", page["id"])
     a.json({"page": slug, "revisions": revisions})
 
+# View a specific revision
+def action_page_revision(a):
+    slug = a.param("page")
+    version = a.param("version")
+
+    if not slug:
+        a.error(400, "Missing page parameter")
+        return
+
+    if not version:
+        a.error(400, "Missing version parameter")
+        return
+
+    page = mochi.db.row("select * from pages where page = ?", slug)
+    if not page:
+        a.error(404, "Page not found")
+        return
+
+    revision = mochi.db.row("select * from revisions where page = ? and version = ?", page["id"], int(version))
+    if not revision:
+        a.error(404, "Revision not found")
+        return
+
+    a.json({
+        "page": slug,
+        "revision": {
+            "id": revision["id"],
+            "title": revision["title"],
+            "content": revision["content"],
+            "author": revision["author"],
+            "created": revision["created"],
+            "version": revision["version"],
+            "comment": revision["comment"]
+        },
+        "current_version": page["version"]
+    })
+
+# Revert to a previous revision
+def action_page_revert(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    slug = a.param("page")
+    version = a.input("version")
+    comment = a.input("comment", "")
+
+    if not slug:
+        a.error(400, "Missing page parameter")
+        return
+
+    if not version:
+        a.error(400, "Version is required")
+        return
+
+    page = mochi.db.row("select * from pages where page = ?", slug)
+    if not page:
+        a.error(404, "Page not found")
+        return
+
+    revision = mochi.db.row("select * from revisions where page = ? and version = ?", page["id"], int(version))
+    if not revision:
+        a.error(404, "Revision not found")
+        return
+
+    # Create new version with content from old revision
+    now = mochi.time.now()
+    author = a.user.identity.id
+    new_version = page["version"] + 1
+
+    if not comment:
+        comment = "Reverted to version " + str(version)
+
+    mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ? where id = ?",
+        revision["title"], revision["content"], author, now, new_version, page["id"])
+    create_revision(page["id"], revision["title"], revision["content"], author, new_version, comment)
+
+    a.json({"slug": slug, "version": new_version, "reverted_from": int(version)})
+
 # Search (stub - to be implemented in Stage 6)
 def action_search(a):
     a.error(501, "Not implemented")

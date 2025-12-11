@@ -30,7 +30,9 @@
 		"-/settings": {"function": "action_settings"},
 		":page": {"function": "action_page"},
 		":page/edit": {"function": "action_page_edit"},
-		":page/history": {"function": "action_page_history"}
+		":page/history": {"function": "action_page_history"},
+		":page/history/:version": {"function": "action_page_revision"},
+		":page/revert": {"function": "action_page_revert"}
 	},
 
 	"events": {
