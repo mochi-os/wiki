@@ -1,3 +1,11 @@
+// Permissions
+export interface WikiPermissions {
+  view: boolean
+  edit: boolean
+  delete: boolean
+  manage: boolean
+}
+
 // Wiki page
 export interface WikiPage {
   id: string
@@ -37,6 +45,7 @@ export interface Revision {
   id: string
   title: string
   author: string
+  author_name: string
   created: number
   version: number
   comment: string
@@ -173,5 +182,32 @@ export interface AttachmentUploadResponse {
 }
 
 export interface AttachmentDeleteResponse {
+  ok: boolean
+}
+
+// Access Control
+export interface AccessRule {
+  id: number
+  subject: string
+  resource: string
+  operation: string
+  grant: number
+  granter: string
+  created: number
+}
+
+export interface AccessListResponse {
+  rules: AccessRule[]
+}
+
+export interface AccessGrantResponse {
+  ok: boolean
+}
+
+export interface AccessDenyResponse {
+  ok: boolean
+}
+
+export interface AccessRevokeResponse {
   ok: boolean
 }

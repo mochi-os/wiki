@@ -40,6 +40,16 @@ def get_wiki(a):
     mochi.log.debug("[WIKI] get_wiki: db lookup result=%s", row)
     return row
 
+# Helper: Check if current user has access to perform an operation
+def check_access(a, wiki_id, operation, page=None):
+    resource = "wiki/" + wiki_id
+    if page:
+        resource = resource + "/page/" + page
+    user = None
+    if a.user and a.user.identity:
+        user = a.user.identity.id
+    return mochi.access.check(user, resource, operation)
+
 # Helper: Broadcast event to all subscribers of a wiki
 def broadcast_event(wiki, event, data):
     if not wiki:
@@ -97,6 +107,14 @@ def action_create(a):
     now = mochi.time.now()
     mochi.db.query("insert into wikis (id, name, created) values (?, ?, ?)", entity, name, now)
 
+    # Set up access rules based on privacy
+    creator = a.user.identity.id
+    resource = "wiki/" + entity
+    if privacy == "public":
+        mochi.access.allow("*", resource, "view", creator)
+        mochi.access.allow("+", resource, "edit", creator)
+    mochi.access.allow(creator, resource, "*", creator)
+
     return {"data": {"id": entity, "name": name}}
 
 # Delete a wiki and all its data
@@ -108,6 +126,10 @@ def action_delete(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
         return
 
     wiki_id = wiki["id"]
@@ -142,7 +164,10 @@ def action_delete(a):
     # 7. Delete all attachments for this entity
     mochi.attachment.clear(wiki_id)
 
-    # 8. Delete the entity from the entities table and directory
+    # 8. Clear access rules
+    mochi.access.clear.resource("wiki/" + wiki_id)
+
+    # 9. Delete the entity from the entities table and directory
     mochi.entity.delete(wiki_id)
 
     return {"data": {"ok": True, "deleted": wiki_id}}
@@ -172,28 +197,37 @@ def action_info_class(a):
 
 # Info endpoint for entity context - returns wiki info
 def action_info_entity(a):
-    mochi.log.debug("[WIKI] action_info_entity called")
-    mochi.log.debug("[WIKI] action_info_entity: a.user=%s", a.user)
-    if not a.user:
-        mochi.log.debug("[WIKI] action_info_entity: returning 401 - not logged in")
-        a.error(401, "Not logged in")
-        return
-
     wiki = get_wiki(a)
-    mochi.log.debug("[WIKI] action_info_entity: wiki=%s", wiki)
     if not wiki:
-        mochi.log.debug("[WIKI] action_info_entity: returning 404 - wiki not found")
         a.error(404, "Wiki not found")
         return
 
-    mochi.log.debug("[WIKI] action_info_entity: returning wiki info")
-    return {"data": {"entity": True, "wiki": wiki}}
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
+        return
+
+    # Build permissions object
+    if a.user:
+        permissions = {
+            "view": check_access(a, wiki["id"], "view"),
+            "edit": check_access(a, wiki["id"], "edit"),
+            "delete": check_access(a, wiki["id"], "delete"),
+            "manage": check_access(a, wiki["id"], "manage"),
+        }
+    else:
+        permissions = {"view": True, "edit": False, "delete": False, "manage": False}
+
+    return {"data": {"entity": True, "wiki": wiki, "permissions": permissions}}
 
 # View a page
 def action_page(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
         return
 
     slug = a.input("page")
@@ -232,6 +266,10 @@ def action_page_edit(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
         return
 
     slug = a.input("page")
@@ -321,6 +359,10 @@ def action_new(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
+        return
+
     slug = a.input("slug")
     title = a.input("title")
     content = a.input("content", "")
@@ -373,6 +415,10 @@ def action_page_history(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
+        return
+
     slug = a.input("page")
     if not slug:
         a.error(400, "Missing page parameter")
@@ -384,6 +430,15 @@ def action_page_history(a):
         return
 
     revisions = mochi.db.query("select id, title, author, created, version, comment from revisions where page = ? order by version desc", page["id"])
+
+    # Resolve author names
+    for rev in revisions:
+        name = mochi.entity.name(rev["author"])
+        if name:
+            rev["author_name"] = name
+        else:
+            rev["author_name"] = rev["author"][:12] + "..."
+
     return {"data": {"page": slug, "revisions": revisions}}
 
 # View a specific revision
@@ -391,6 +446,10 @@ def action_page_revision(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
         return
 
     slug = a.input("page")
@@ -414,6 +473,10 @@ def action_page_revision(a):
         a.error(404, "Revision not found")
         return
 
+    # Resolve author name
+    name = mochi.entity.name(revision["author"])
+    author_name = name if name else revision["author"][:12] + "..."
+
     return {"data": {
         "page": slug,
         "revision": {
@@ -421,6 +484,7 @@ def action_page_revision(a):
             "title": revision["title"],
             "content": revision["content"],
             "author": revision["author"],
+            "author_name": author_name,
             "created": revision["created"],
             "version": revision["version"],
             "comment": revision["comment"]
@@ -437,6 +501,10 @@ def action_page_revert(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
         return
 
     slug = a.input("page")
@@ -497,6 +565,10 @@ def action_page_delete(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "delete"):
+        a.error(403, "Access denied")
+        return
+
     slug = a.input("page")
     if not slug:
         a.error(400, "Missing page parameter")
@@ -530,6 +602,10 @@ def action_tag_add(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
         return
 
     slug = a.input("page")
@@ -580,6 +656,10 @@ def action_tag_remove(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
+        return
+
     slug = a.input("page")
     tag = a.input("tag")
 
@@ -615,6 +695,10 @@ def action_tags(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
+        return
+
     tags = mochi.db.query("""
         select t.tag, count(*) as count
         from tags t
@@ -630,6 +714,10 @@ def action_tag_pages(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
         return
 
     tag = a.input("tag")
@@ -659,6 +747,10 @@ def action_redirect_set(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
         return
 
     source = a.input("source")
@@ -720,6 +812,10 @@ def action_redirect_delete(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
+        return
+
     source = a.input("source")
 
     if not source:
@@ -743,6 +839,10 @@ def action_redirects(a):
         a.error(404, "Wiki not found")
         return
 
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
+        return
+
     redirects = mochi.db.query("select source, target, created from redirects where wiki = ? order by source", wiki["id"])
     return {"data": {"redirects": redirects}}
 
@@ -751,6 +851,10 @@ def action_settings(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
         return
 
     return {"data": {"settings": {"home": wiki["home"]}}}
@@ -764,6 +868,10 @@ def action_settings_set(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
         return
 
     name = a.input("name")
@@ -792,11 +900,144 @@ def action_settings_set(a):
 
     return {"data": {"ok": True}}
 
+# ACCESS CONTROL
+
+# List access rules for the wiki
+def action_access_list(a):
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
+        return
+
+    resource = "wiki/" + wiki["id"]
+    rules = mochi.access.list.resource(resource)
+    return {"data": {"rules": rules}}
+
+# Grant access to a subject
+def action_access_grant(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
+        return
+
+    subject = a.input("subject")
+    operation = a.input("operation")
+    page = a.input("page")
+
+    if not subject:
+        a.error(400, "Subject is required")
+        return
+
+    if not operation:
+        a.error(400, "Operation is required")
+        return
+
+    if operation not in ["view", "edit", "delete", "manage", "*"]:
+        a.error(400, "Invalid operation")
+        return
+
+    resource = "wiki/" + wiki["id"]
+    if page:
+        resource = resource + "/page/" + page
+
+    granter = a.user.identity.id
+    mochi.access.allow(subject, resource, operation, granter)
+    return {"data": {"ok": True}}
+
+# Deny access to a subject
+def action_access_deny(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
+        return
+
+    subject = a.input("subject")
+    operation = a.input("operation")
+    page = a.input("page")
+
+    if not subject:
+        a.error(400, "Subject is required")
+        return
+
+    if not operation:
+        a.error(400, "Operation is required")
+        return
+
+    if operation not in ["view", "edit", "delete", "manage", "*"]:
+        a.error(400, "Invalid operation")
+        return
+
+    resource = "wiki/" + wiki["id"]
+    if page:
+        resource = resource + "/page/" + page
+
+    granter = a.user.identity.id
+    mochi.access.deny(subject, resource, operation, granter)
+    return {"data": {"ok": True}}
+
+# Revoke an access rule
+def action_access_revoke(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "manage"):
+        a.error(403, "Access denied")
+        return
+
+    subject = a.input("subject")
+    operation = a.input("operation")
+    page = a.input("page")
+
+    if not subject:
+        a.error(400, "Subject is required")
+        return
+
+    if not operation:
+        a.error(400, "Operation is required")
+        return
+
+    resource = "wiki/" + wiki["id"]
+    if page:
+        resource = resource + "/page/" + page
+
+    mochi.access.revoke(subject, resource, operation)
+    return {"data": {"ok": True}}
+
 # Search pages by title and content
 def action_search(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
         return
 
     query = a.input("q", "")
@@ -1187,13 +1428,13 @@ def action_sync(a):
 
 # List all wiki attachments
 def action_attachments(a):
-    if not a.user:
-        a.error(401, "Not logged in")
-        return
-
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
         return
 
     attachments = mochi.attachment.list(wiki["id"])
@@ -1208,6 +1449,10 @@ def action_attachment_upload(a):
     wiki = get_wiki(a)
     if not wiki:
         a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "edit"):
+        a.error(403, "Access denied")
         return
 
     # Get subscribers for notification
@@ -1226,6 +1471,15 @@ def action_attachment_upload(a):
 def action_attachment_delete(a):
     if not a.user:
         a.error(401, "Not logged in")
+        return
+
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "delete"):
+        a.error(403, "Access denied")
         return
 
     id = a.input("id")

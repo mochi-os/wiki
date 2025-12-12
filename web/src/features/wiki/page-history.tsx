@@ -69,8 +69,8 @@ export function PageHistory({
               <TableRow key={revision.id}>
                 <TableCell className="font-mono">v{revision.version}</TableCell>
                 <TableCell>{revision.title}</TableCell>
-                <TableCell className="text-muted-foreground font-mono text-sm">
-                  {revision.author.slice(0, 12)}...
+                <TableCell className="text-muted-foreground">
+                  {revision.author_name}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {format(new Date(revision.created * 1000), 'PPp')}

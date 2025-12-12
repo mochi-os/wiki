@@ -30,6 +30,11 @@ const endpoints = {
     // Settings
     settings: 'settings',
     settingsSet: 'settings/set',
+    // Access control
+    access: 'access',
+    accessGrant: 'access/grant',
+    accessDeny: 'access/deny',
+    accessRevoke: 'access/revoke',
     // Delete wiki
     delete: 'delete',
     // Sync

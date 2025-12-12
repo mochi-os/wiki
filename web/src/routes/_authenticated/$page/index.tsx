@@ -5,6 +5,7 @@ import {
   PageNotFound,
   PageViewSkeleton,
 } from '@/features/wiki/page-view'
+import { PageHeader } from '@/features/wiki/page-header'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 
@@ -45,7 +46,9 @@ function WikiPageRoute() {
   if (data && 'error' in data && data.error === 'not_found') {
     return (
       <>
-        <Header />
+        <Header>
+          <h1 className="text-lg font-semibold">Page not found</h1>
+        </Header>
         <Main>
           <PageNotFound slug={slug} />
         </Main>
@@ -57,7 +60,9 @@ function WikiPageRoute() {
   if (data && 'page' in data && typeof data.page === 'object') {
     return (
       <>
-        <Header />
+        <Header>
+          <PageHeader page={data.page} />
+        </Header>
         <Main>
           <PageView page={data.page} />
         </Main>

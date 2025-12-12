@@ -21,16 +21,22 @@ import type {
   AttachmentsResponse,
   AttachmentUploadResponse,
   AttachmentDeleteResponse,
+  AccessListResponse,
+  AccessGrantResponse,
+  AccessDenyResponse,
+  AccessRevokeResponse,
+  WikiPermissions,
 } from '@/types/wiki'
 import endpoints from '@/api/endpoints'
 import { requestHelpers } from '@/lib/request'
 
 // Wiki info
 
-interface WikiInfoResponse {
+export interface WikiInfoResponse {
   entity: boolean
   wiki?: { id: string; name: string; home: string }
   wikis?: Array<{ id: string; name: string; home: string }>
+  permissions?: WikiPermissions
 }
 
 export function useWikiInfo() {
@@ -316,6 +322,49 @@ export function useDeleteAttachment() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wiki', 'attachments'] })
+    },
+  })
+}
+
+// Access Control
+
+export function useAccessRules() {
+  return useQuery({
+    queryKey: ['wiki', 'access'],
+    queryFn: () =>
+      requestHelpers.get<AccessListResponse>(endpoints.wiki.access),
+  })
+}
+
+export function useGrantAccess() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
+      requestHelpers.post<AccessGrantResponse>(endpoints.wiki.accessGrant, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
+    },
+  })
+}
+
+export function useDenyAccess() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
+      requestHelpers.post<AccessDenyResponse>(endpoints.wiki.accessDeny, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
+    },
+  })
+}
+
+export function useRevokeAccess() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
+      requestHelpers.post<AccessRevokeResponse>(endpoints.wiki.accessRevoke, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
     },
   })
 }

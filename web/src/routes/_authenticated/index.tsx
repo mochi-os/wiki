@@ -13,6 +13,7 @@ import {
   PageNotFound,
   PageViewSkeleton,
 } from '@/features/wiki/page-view'
+import { PageHeader } from '@/features/wiki/page-header'
 
 interface InfoResponse {
   entity: boolean
@@ -71,7 +72,9 @@ function WikiHomePage({ homeSlug }: { homeSlug: string }) {
   if (data && 'error' in data && data.error === 'not_found') {
     return (
       <>
-        <Header />
+        <Header>
+          <h1 className="text-lg font-semibold">Page not found</h1>
+        </Header>
         <Main>
           <PageNotFound slug={homeSlug} />
         </Main>
@@ -83,7 +86,9 @@ function WikiHomePage({ homeSlug }: { homeSlug: string }) {
   if (data && 'page' in data && typeof data.page === 'object') {
     return (
       <>
-        <Header />
+        <Header>
+          <PageHeader page={data.page} />
+        </Header>
         <Main>
           <PageView page={data.page} />
         </Main>

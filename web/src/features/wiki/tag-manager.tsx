@@ -10,6 +10,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { useAddTag, useRemoveTag } from '@/hooks/use-wiki'
+import { usePermissions } from '@/context/wiki-context'
 
 interface TagManagerProps {
   slug: string
@@ -21,6 +22,8 @@ export function TagManager({ slug, tags }: TagManagerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const addTag = useAddTag()
   const removeTag = useRemoveTag()
+  const permissions = usePermissions()
+  const canEdit = permissions.edit
 
   const handleAddTag = () => {
     const tag = newTag.trim().toLowerCase()
@@ -72,56 +75,59 @@ export function TagManager({ slug, tags }: TagManagerProps) {
 
       {/* Existing tags */}
       {tags.map((tag) => (
-        <Badge key={tag} variant="secondary" className="group gap-1 pr-1">
+        <Badge key={tag} variant="secondary" className={canEdit ? "group gap-1 pr-1" : ""}>
           <a href={`tag/${tag}`} className="hover:underline">
             {tag}
           </a>
-          <button
-            onClick={() => handleRemoveTag(tag)}
-            className="text-muted-foreground hover:text-foreground ml-1 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
-            disabled={removeTag.isPending}
-          >
-            <X className="h-3 w-3" />
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => handleRemoveTag(tag)}
+              className="text-muted-foreground hover:text-foreground ml-1 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+              disabled={removeTag.isPending}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </Badge>
       ))}
 
       {/* Add tag button */}
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 gap-1 px-2">
-            <Plus className="h-3 w-3" />
-            Add tag
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64 p-3" align="start">
-          <div className="space-y-2">
-            <Input
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Enter tag name"
-              autoFocus
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleAddTag}
-                disabled={!newTag.trim() || addTag.isPending}
-              >
-                {addTag.isPending ? 'Adding...' : 'Add'}
-              </Button>
+      {canEdit && (
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+          <PopoverTrigger asChild>
+            <button className="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors">
+              <Plus className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="start">
+            <div className="space-y-2">
+              <Input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Enter tag name"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAddTag}
+                  disabled={!newTag.trim() || addTag.isPending}
+                >
+                  {addTag.isPending ? 'Adding...' : 'Add'}
+                </Button>
+              </div>
             </div>
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   )
 }
