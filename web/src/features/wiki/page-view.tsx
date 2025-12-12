@@ -1,3 +1,4 @@
+import { format } from 'date-fns'
 import { Edit, FileQuestion } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,7 +18,12 @@ export function PageView({ page }: PageViewProps) {
       <Separator />
       <MarkdownContent content={page.content} />
       <Separator />
-      <TagManager slug={page.slug} tags={page.tags} />
+      <div className="flex items-center justify-between gap-4">
+        <TagManager slug={page.slug} tags={page.tags} />
+        <span className="text-muted-foreground text-xs shrink-0">
+          #{page.version}, {format(new Date(page.updated * 1000), 'yyyy-MM-dd HH:mm:ss')}
+        </span>
+      </div>
     </article>
   )
 }

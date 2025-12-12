@@ -9,6 +9,7 @@ const endpoints = {
     // Info
     info: 'info',
     create: 'create',
+    join: 'join',
     // Pages
     page: (slug: string) => `${slug}`,
     pageEdit: (slug: string) => `${slug}/edit`,

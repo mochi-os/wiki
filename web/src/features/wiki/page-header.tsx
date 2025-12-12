@@ -1,4 +1,3 @@
-import { format } from 'date-fns'
 import { Link } from '@tanstack/react-router'
 import { Edit, History, MoreHorizontal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,42 +20,37 @@ export function PageHeader({ page }: PageHeaderProps) {
   return (
     <div className="flex flex-1 items-center justify-between gap-4">
       <h1 className="truncate text-3xl font-semibold leading-normal">{page.title}</h1>
-      <div className="flex flex-col items-end gap-0.5">
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="History">
-            <Link to="/$page/history" params={{ page: page.slug }}>
-              <History className="h-4 w-4" />
-            </Link>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="More">
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
           {permissions.edit && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild title="Edit">
+            <DropdownMenuItem asChild>
               <Link to="/$page/edit" params={{ page: page.slug }}>
-                <Edit className="h-4 w-4" />
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
               </Link>
-            </Button>
+            </DropdownMenuItem>
           )}
+          <DropdownMenuItem asChild>
+            <Link to="/$page/history" params={{ page: page.slug }}>
+              <History className="mr-2 h-4 w-4" />
+              History
+            </Link>
+          </DropdownMenuItem>
           {permissions.delete && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="More">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link to="/$page/delete" params={{ page: page.slug }}>
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete page
-                  </Link>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <DropdownMenuItem asChild>
+              <Link to="/$page/delete" params={{ page: page.slug }}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </Link>
+            </DropdownMenuItem>
           )}
-        </div>
-        <span className="text-muted-foreground text-xs">
-          #{page.version}, {format(new Date(page.updated * 1000), 'yyyy-MM-dd HH:mm:ss')}
-        </span>
-      </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

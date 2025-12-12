@@ -16,6 +16,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedRedirectsRouteImport } from './routes/_authenticated/redirects'
 import { Route as AuthenticatedNewRouteImport } from './routes/_authenticated/new'
+import { Route as AuthenticatedJoinRouteImport } from './routes/_authenticated/join'
 import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as errors500RouteImport } from './routes/(errors)/500'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -68,6 +69,11 @@ const AuthenticatedRedirectsRoute = AuthenticatedRedirectsRouteImport.update({
 const AuthenticatedNewRoute = AuthenticatedNewRouteImport.update({
   id: '/new',
   path: '/new',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedJoinRoute = AuthenticatedJoinRouteImport.update({
+  id: '/join',
+  path: '/join',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const errors503Route = errors503RouteImport.update({
@@ -181,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/join': typeof AuthenticatedJoinRoute
   '/new': typeof AuthenticatedNewRoute
   '/redirects': typeof AuthenticatedRedirectsRoute
   '/search': typeof AuthenticatedSearchRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/404': typeof errors404Route
   '/500': typeof errors500Route
   '/503': typeof errors503Route
+  '/join': typeof AuthenticatedJoinRoute
   '/new': typeof AuthenticatedNewRoute
   '/redirects': typeof AuthenticatedRedirectsRoute
   '/search': typeof AuthenticatedSearchRoute
@@ -237,6 +245,7 @@ export interface FileRoutesById {
   '/(errors)/404': typeof errors404Route
   '/(errors)/500': typeof errors500Route
   '/(errors)/503': typeof errors503Route
+  '/_authenticated/join': typeof AuthenticatedJoinRoute
   '/_authenticated/new': typeof AuthenticatedNewRoute
   '/_authenticated/redirects': typeof AuthenticatedRedirectsRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
@@ -266,6 +275,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/join'
     | '/new'
     | '/redirects'
     | '/search'
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/404'
     | '/500'
     | '/503'
+    | '/join'
     | '/new'
     | '/redirects'
     | '/search'
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | '/(errors)/404'
     | '/(errors)/500'
     | '/(errors)/503'
+    | '/_authenticated/join'
     | '/_authenticated/new'
     | '/_authenticated/redirects'
     | '/_authenticated/search'
@@ -401,6 +413,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new'
       preLoaderRoute: typeof AuthenticatedNewRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/join': {
+      id: '/_authenticated/join'
+      path: '/join'
+      fullPath: '/join'
+      preLoaderRoute: typeof AuthenticatedJoinRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/(errors)/503': {
@@ -540,6 +559,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedJoinRoute: typeof AuthenticatedJoinRoute
   AuthenticatedNewRoute: typeof AuthenticatedNewRoute
   AuthenticatedRedirectsRoute: typeof AuthenticatedRedirectsRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
@@ -563,6 +583,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedJoinRoute: AuthenticatedJoinRoute,
   AuthenticatedNewRoute: AuthenticatedNewRoute,
   AuthenticatedRedirectsRoute: AuthenticatedRedirectsRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,

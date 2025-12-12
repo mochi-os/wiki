@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
+import { Library } from 'lucide-react'
 import { useLayout } from '@/context/layout-provider'
-import { usePermissions } from '@/context/wiki-context'
+import { usePermissions, useWikiContext } from '@/context/wiki-context'
 import {
   Sidebar,
   SidebarContent,
@@ -8,31 +9,57 @@ import {
 } from '@/components/ui/sidebar'
 import { sidebarData } from './data/sidebar-data'
 import { NavGroup } from './nav-group'
+import { getAppPath } from '@/lib/app-path'
 
 export function AppSidebar() {
   const { collapsible, variant } = useLayout()
   const permissions = usePermissions()
+  const { info } = useWikiContext()
+
+  // Get wiki name if in entity context
+  const wikiName = info?.entity && info?.wiki?.name ? info.wiki.name : null
+
+  // No sidebar when not viewing a specific wiki
+  if (!wikiName) {
+    return null
+  }
 
   const filteredNavGroups = useMemo(() => {
     return sidebarData.navGroups
       .map((group) => {
-        // Filter items based on permissions
-        const filteredItems = group.items.filter((item) => {
-          // Hide "New page" if user can't edit
-          if (item.title === 'New page' && !permissions.edit) {
-            return false
-          }
-          // Hide admin items if user can't manage
-          if (item.title === 'Settings' && !permissions.manage) {
-            return false
-          }
-          return true
-        })
+        // Filter and transform items based on permissions
+        let filteredItems = group.items
+          .filter((item) => {
+            // Hide "New page" if user can't edit
+            if (item.title === 'New page' && !permissions.edit) {
+              return false
+            }
+            // Hide admin items if user can't manage
+            if (item.title === 'Settings' && !permissions.manage) {
+              return false
+            }
+            return true
+          })
+          .map((item) => {
+            // Replace "Home" title with wiki name
+            if (item.title === 'Home') {
+              return { ...item, title: wikiName }
+            }
+            return item
+          })
+
+        // Add "All wikis" link at the start of Browse group
+        if (group.title === 'Browse') {
+          filteredItems = [
+            { title: 'All wikis', url: getAppPath(), icon: Library, external: true },
+            ...filteredItems,
+          ]
+        }
 
         return { ...group, items: filteredItems }
       })
       .filter((group) => group.items.length > 0) // Remove empty groups
-  }, [permissions])
+  }, [permissions, wikiName])
 
   return (
     <Sidebar collapsible={collapsible} variant={variant}>

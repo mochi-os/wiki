@@ -30,7 +30,7 @@ export function PageHistory({
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <History className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">Page History</h1>
+          <h1 className="text-2xl font-bold">History</h1>
         </div>
         <Button variant="outline" asChild>
           <a href={slug}>
@@ -41,8 +41,7 @@ export function PageHistory({
       </div>
 
       <p className="text-muted-foreground">
-        Viewing history for <strong>{slug}</strong> (current version:{' '}
-        {currentVersion})
+        Viewing history for <strong>{slug}</strong>, current version {currentVersion}
       </p>
 
       <Separator />

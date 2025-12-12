@@ -6,14 +6,16 @@
 	"label": "app_name",
 	"classes": ["wiki"],
 	"paths": ["wiki"],
+	"services": ["wiki"],
 
 	"architecture": {"engine": "starlark", "version": 2},
 	"execute": ["wiki.star"],
 
 	"database": {
-		"schema": 1,
+		"schema": 2,
 		"file": "wiki.db",
 		"create": {"function": "database_create"},
+		"upgrade": {"2": {"function": "database_upgrade_2"}},
 		"helpers": ["access", "attachments"]
 	},
 
@@ -26,6 +28,7 @@
 		"info": {"function": "action_info_class", "public": true},
 		"create": {"function": "action_create"},
 		"new": {"function": "action_create"},
+		"join": {"function": "action_join"},
 		"assets": {"files": "web/dist/assets", "public": true},
 		"images": {"files": "web/dist/images", "public": true},
 		":wiki": {"file": "web/dist/index.html", "public": true},

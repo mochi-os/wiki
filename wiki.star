@@ -4,8 +4,8 @@
 # Database creation
 
 def database_create():
-    # Wikis table
-    mochi.db.query("create table wikis (id text primary key, name text not null, home text not null default 'home', created integer not null)")
+    # Wikis table - source is the upstream wiki entity ID for joined wikis
+    mochi.db.query("create table wikis (id text primary key, name text not null, home text not null default 'home', source text not null default '', created integer not null)")
 
     # Pages table
     mochi.db.query("create table pages (id text primary key, wiki text not null references wikis(id), page text not null, title text not null, content text not null, author text not null, created integer not null, updated integer not null, version integer not null default 1, deleted integer not null default 0)")
@@ -29,6 +29,12 @@ def database_create():
     # Subscribers table
     mochi.db.query("create table subscribers (wiki text not null references wikis(id), id text not null, name text not null default '', subscribed integer not null, primary key (wiki, id))")
 
+# Database upgrades
+
+def database_upgrade_2():
+    # Add source column for tracking upstream wiki
+    mochi.db.query("alter table wikis add column source text not null default ''")
+
 # Helper: Get wiki from request, validating it exists
 def get_wiki(a):
     wiki = a.input("wiki")
@@ -36,7 +42,7 @@ def get_wiki(a):
     if not wiki:
         mochi.log.debug("[WIKI] get_wiki: wiki is empty/None")
         return None
-    row = mochi.db.row("select * from wikis where id = ?", wiki)
+    row = mochi.db.row("select * from wikis where id=?", wiki)
     mochi.log.debug("[WIKI] get_wiki: db lookup result=%s", row)
     return row
 
@@ -60,7 +66,7 @@ def check_access(a, wiki_id, operation, page=None):
 def broadcast_event(wiki, event, data):
     if not wiki:
         return
-    subscribers = mochi.db.query("select id from subscribers where wiki = ?", wiki)
+    subscribers = mochi.db.query("select id from subscribers where wiki=?", wiki)
     for sub in subscribers:
         mochi.message.send(
             {"from": wiki, "to": sub["id"], "service": "wiki", "event": event},
@@ -70,11 +76,11 @@ def broadcast_event(wiki, event, data):
 # Helper: Get page by slug, following redirects
 def get_page(wiki, slug):
     # Check for redirect first
-    redirect = mochi.db.row("select target from redirects where wiki = ? and source = ?", wiki, slug)
+    redirect = mochi.db.row("select target from redirects where wiki=? and source=?", wiki, slug)
     if redirect:
         slug = redirect["target"]
 
-    page = mochi.db.row("select * from pages where wiki = ? and page = ? and deleted = 0", wiki, slug)
+    page = mochi.db.row("select * from pages where wiki=? and page=? and deleted=0", wiki, slug)
     return page
 
 # Helper: Create a revision for a page
@@ -123,6 +129,64 @@ def action_create(a):
 
     return {"data": {"id": entity, "name": name}}
 
+# Join an existing remote wiki by creating a local copy
+def action_join(a):
+    if not a.user:
+        a.error(401, "Not logged in")
+        return
+
+    # Get the remote wiki entity ID
+    source = a.input("target")
+    if not source:
+        a.error(400, "Target wiki entity ID is required")
+        return
+
+    # Check if we already have a wiki tracking this source
+    existing = mochi.db.row("select * from wikis where source=?", source)
+    if existing:
+        a.error(400, "Already joined this wiki")
+        return
+
+    # Use the user's identity as the "from" header for the stream request
+    from_entity = a.user.identity.id if a.user.identity else ""
+
+    # Sync data from the remote wiki first to get the name
+    stream = mochi.stream(
+        {"from": from_entity, "to": source, "service": "wiki", "event": "sync"},
+        {}
+    )
+
+    dump = stream.read()
+    if not dump or dump.get("status") != "200":
+        a.error(500, "Failed to sync from remote wiki")
+        return
+
+    # Get the wiki name from the sync response
+    name = dump.get("name") or "Joined Wiki"
+
+    # Create a new local entity for this wiki
+    entity = mochi.entity.create("wiki", name, "public", "")
+    if not entity:
+        a.error(500, "Failed to create wiki entity")
+        return
+
+    # Register wiki in the database with source tracking
+    now = mochi.time.now()
+    mochi.db.query("insert into wikis (id, name, home, source, created) values (?, ?, ?, ?, ?)",
+        entity, name, dump.get("home") or "home", source, now)
+
+    # Import the synced data into the new local wiki
+    import_sync_dump(entity, dump)
+
+    # Set up access rules - public view, authenticated edit, creator manages
+    creator = a.user.identity.id
+    resource = "wiki/" + entity
+    mochi.access.allow("*", resource, "view", creator)
+    mochi.access.allow("+", resource, "edit", creator)
+    mochi.access.allow(creator, resource, "*", creator)
+
+    return {"data": {"id": entity, "name": name, "source": source, "message": "Wiki joined successfully"}}
+
 # Delete a wiki and all its data
 def action_delete(a):
     if not a.user:
@@ -144,28 +208,28 @@ def action_delete(a):
     # 1. Delete tags (references pages)
     mochi.db.query("""
         delete from tags where page in (
-            select id from pages where wiki = ?
+            select id from pages where wiki=?
         )
     """, wiki_id)
 
     # 2. Delete revisions (references pages)
     mochi.db.query("""
         delete from revisions where page in (
-            select id from pages where wiki = ?
+            select id from pages where wiki=?
         )
     """, wiki_id)
 
     # 3. Delete pages
-    mochi.db.query("delete from pages where wiki = ?", wiki_id)
+    mochi.db.query("delete from pages where wiki=?", wiki_id)
 
     # 4. Delete redirects
-    mochi.db.query("delete from redirects where wiki = ?", wiki_id)
+    mochi.db.query("delete from redirects where wiki=?", wiki_id)
 
     # 5. Delete subscribers
-    mochi.db.query("delete from subscribers where wiki = ?", wiki_id)
+    mochi.db.query("delete from subscribers where wiki=?", wiki_id)
 
     # 6. Delete wiki record
-    mochi.db.query("delete from wikis where id = ?", wiki_id)
+    mochi.db.query("delete from wikis where id=?", wiki_id)
 
     # 7. Delete all attachments for this entity
     mochi.attachment.clear(wiki_id)
@@ -247,7 +311,7 @@ def action_page(a):
         return {"data": {"error": "not_found", "page": slug}}
 
     # Get tags for this page
-    tags = mochi.db.query("select tag from tags where page = ?", page["id"])
+    tags = mochi.db.query("select tag from tags where page=?", page["id"])
     taglist = [t["tag"] for t in tags]
 
     return {"data": {
@@ -299,14 +363,14 @@ def action_page_edit(a):
     author = a.user.identity.id
 
     # Check if page exists
-    existing = mochi.db.row("select * from pages where wiki = ? and page = ?", wiki["id"], slug)
+    existing = mochi.db.row("select * from pages where wiki=? and page=?", wiki["id"], slug)
 
     if existing:
         # Update existing page
         if existing["deleted"]:
             # Restore deleted page
             version = existing["version"] + 1
-            mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ?, deleted = 0 where id = ?",
+            mochi.db.query("update pages set title=?, content=?, author=?, updated=?, version=?, deleted=0 where id=?",
                 title, content, author, now, version, existing["id"])
             create_revision(existing["id"], title, content, author, version, comment)
             # Send page/create event (restored page)
@@ -323,7 +387,7 @@ def action_page_edit(a):
         else:
             # Update page
             version = existing["version"] + 1
-            mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ? where id = ?",
+            mochi.db.query("update pages set title=?, content=?, author=?, updated=?, version=? where id=?",
                 title, content, author, now, version, existing["id"])
             create_revision(existing["id"], title, content, author, version, comment)
             # Send page/update event
@@ -388,7 +452,7 @@ def action_new(a):
         return
 
     # Check if page already exists
-    existing = mochi.db.row("select id from pages where wiki = ? and page = ?", wiki["id"], slug)
+    existing = mochi.db.row("select id from pages where wiki=? and page=?", wiki["id"], slug)
     if existing:
         a.error(409, "Page already exists")
         return
@@ -431,12 +495,12 @@ def action_page_history(a):
         a.error(400, "Missing page parameter")
         return
 
-    page = mochi.db.row("select * from pages where wiki = ? and page = ?", wiki["id"], slug)
+    page = mochi.db.row("select * from pages where wiki=? and page=?", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
 
-    revisions = mochi.db.query("select id, title, author, created, version, comment from revisions where page = ? order by version desc", page["id"])
+    revisions = mochi.db.query("select id, title, author, created, version, comment from revisions where page=? order by version desc", page["id"])
 
     # Resolve author names
     for rev in revisions:
@@ -470,12 +534,12 @@ def action_page_revision(a):
         a.error(400, "Missing version parameter")
         return
 
-    page = mochi.db.row("select * from pages where wiki = ? and page = ?", wiki["id"], slug)
+    page = mochi.db.row("select * from pages where wiki=? and page=?", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
 
-    revision = mochi.db.row("select * from revisions where page = ? and version = ?", page["id"], int(version))
+    revision = mochi.db.row("select * from revisions where page=? and version=?", page["id"], int(version))
     if not revision:
         a.error(404, "Revision not found")
         return
@@ -526,12 +590,12 @@ def action_page_revert(a):
         a.error(400, "Version is required")
         return
 
-    page = mochi.db.row("select * from pages where wiki = ? and page = ?", wiki["id"], slug)
+    page = mochi.db.row("select * from pages where wiki=? and page=?", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
 
-    revision = mochi.db.row("select * from revisions where page = ? and version = ?", page["id"], int(version))
+    revision = mochi.db.row("select * from revisions where page=? and version=?", page["id"], int(version))
     if not revision:
         a.error(404, "Revision not found")
         return
@@ -544,7 +608,7 @@ def action_page_revert(a):
     if not comment:
         comment = "Reverted to version " + str(version)
 
-    mochi.db.query("update pages set title = ?, content = ?, author = ?, updated = ?, version = ? where id = ?",
+    mochi.db.query("update pages set title=?, content=?, author=?, updated=?, version=? where id=?",
         revision["title"], revision["content"], author, now, newversion, page["id"])
     create_revision(page["id"], revision["title"], revision["content"], author, newversion, comment)
 
@@ -581,7 +645,7 @@ def action_page_delete(a):
         a.error(400, "Missing page parameter")
         return
 
-    page = mochi.db.row("select * from pages where wiki = ? and page = ? and deleted = 0", wiki["id"], slug)
+    page = mochi.db.row("select * from pages where wiki=? and page=? and deleted=0", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
@@ -589,7 +653,7 @@ def action_page_delete(a):
     now = mochi.time.now()
     version = page["version"] + 1
 
-    mochi.db.query("update pages set deleted = ?, version = ? where id = ?", now, version, page["id"])
+    mochi.db.query("update pages set deleted=?, version=? where id=?", now, version, page["id"])
 
     # Send page/delete event
     broadcast_event(wiki["id"], "page/delete", {
@@ -632,13 +696,13 @@ def action_tag_add(a):
         a.error(400, "Tag is required")
         return
 
-    page = mochi.db.row("select id from pages where wiki = ? and page = ? and deleted = 0", wiki["id"], slug)
+    page = mochi.db.row("select id from pages where wiki=? and page=? and deleted=0", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
 
     # Check if tag already exists
-    existing = mochi.db.row("select 1 from tags where page = ? and tag = ?", page["id"], tag)
+    existing = mochi.db.row("select 1 from tags where page=? and tag=?", page["id"], tag)
     if existing:
         return {"data": {"ok": True, "added": False}}
 
@@ -680,12 +744,12 @@ def action_tag_remove(a):
 
     tag = tag.lower().strip()
 
-    page = mochi.db.row("select id from pages where wiki = ? and page = ? and deleted = 0", wiki["id"], slug)
+    page = mochi.db.row("select id from pages where wiki=? and page=? and deleted=0", wiki["id"], slug)
     if not page:
         a.error(404, "Page not found")
         return
 
-    mochi.db.query("delete from tags where page = ? and tag = ?", page["id"], tag)
+    mochi.db.query("delete from tags where page=? and tag=?", page["id"], tag)
 
     # Send tag/remove event
     broadcast_event(wiki["id"], "tag/remove", {
@@ -709,8 +773,8 @@ def action_tags(a):
     tags = mochi.db.query("""
         select t.tag, count(*) as count
         from tags t
-        join pages p on p.id = t.page
-        where p.wiki = ? and p.deleted = 0
+        join pages p on p.id=t.page
+        where p.wiki=? and p.deleted=0
         group by t.tag
         order by count desc, t.tag asc
     """, wiki["id"])
@@ -738,8 +802,8 @@ def action_tag_pages(a):
     pages = mochi.db.query("""
         select p.page, p.title, p.updated
         from pages p
-        join tags t on t.page = p.id
-        where p.wiki = ? and t.tag = ? and p.deleted = 0
+        join tags t on t.page=p.id
+        where p.wiki=? and t.tag=? and p.deleted=0
         order by p.updated desc
     """, wiki["id"], tag)
 
@@ -785,13 +849,13 @@ def action_redirect_set(a):
         return
 
     # Check if target page exists
-    targetpage = mochi.db.row("select id from pages where wiki = ? and page = ? and deleted = 0", wiki["id"], target)
+    targetpage = mochi.db.row("select id from pages where wiki=? and page=? and deleted=0", wiki["id"], target)
     if not targetpage:
         a.error(400, "Target page does not exist")
         return
 
     # Check if source conflicts with an existing page
-    sourcepage = mochi.db.row("select id from pages where wiki = ? and page = ? and deleted = 0", wiki["id"], source)
+    sourcepage = mochi.db.row("select id from pages where wiki=? and page=? and deleted=0", wiki["id"], source)
     if sourcepage:
         a.error(400, "Cannot redirect: a page with this slug already exists")
         return
@@ -830,7 +894,7 @@ def action_redirect_delete(a):
         return
 
     source = source.lower().strip()
-    mochi.db.query("delete from redirects where wiki = ? and source = ?", wiki["id"], source)
+    mochi.db.query("delete from redirects where wiki=? and source=?", wiki["id"], source)
 
     # Send redirect/delete event
     broadcast_event(wiki["id"], "redirect/delete", {
@@ -850,7 +914,7 @@ def action_redirects(a):
         a.error(403, "Access denied")
         return
 
-    redirects = mochi.db.query("select source, target, created from redirects where wiki = ? order by source", wiki["id"])
+    redirects = mochi.db.query("select source, target, created from redirects where wiki=? order by source", wiki["id"])
     return {"data": {"redirects": redirects}}
 
 # View wiki settings
@@ -894,7 +958,7 @@ def action_settings_set(a):
 
     # Only allow known settings
     if name == "home":
-        mochi.db.query("update wikis set home = ? where id = ?", value, wiki["id"])
+        mochi.db.query("update wikis set home=? where id=?", value, wiki["id"])
     else:
         a.error(400, "Unknown setting: " + name)
         return
@@ -1060,7 +1124,7 @@ def action_search(a):
     results = mochi.db.query("""
         select page, title, substr(content, 1, 200) as excerpt, updated
         from pages
-        where wiki = ? and deleted = 0 and (title like ? or content like ?)
+        where wiki=? and deleted=0 and (title like ? or content like ?)
         order by
             case when title like ? then 0 else 1 end,
             updated desc
@@ -1095,7 +1159,7 @@ def event_page_create(e):
         return
 
     # Ensure wiki exists in database
-    if not mochi.db.exists("select 1 from wikis where id = ?", wiki):
+    if not mochi.db.exists("select 1 from wikis where id=?", wiki):
         return
 
     id = e.content("id")
@@ -1111,7 +1175,7 @@ def event_page_create(e):
         return
 
     # Check if page already exists
-    existing = mochi.db.row("select * from pages where id = ?", id)
+    existing = mochi.db.row("select * from pages where id=?", id)
 
     if existing:
         # Apply conflict resolution
@@ -1119,7 +1183,7 @@ def event_page_create(e):
             return
 
         # Update existing page (may be restoring a deleted page)
-        mochi.db.query("update pages set page = ?, title = ?, content = ?, author = ?, created = ?, updated = ?, version = ?, deleted = 0 where id = ?",
+        mochi.db.query("update pages set page=?, title=?, content=?, author=?, created=?, updated=?, version=?, deleted=0 where id=?",
             page, title, content, author, created, created, version, id)
     else:
         # Insert new page
@@ -1138,7 +1202,7 @@ def event_page_update(e):
         return
 
     # Ensure wiki exists in database
-    if not mochi.db.exists("select 1 from wikis where id = ?", wiki):
+    if not mochi.db.exists("select 1 from wikis where id=?", wiki):
         return
 
     id = e.content("id")
@@ -1154,7 +1218,7 @@ def event_page_update(e):
         return
 
     # Check if page exists
-    existing = mochi.db.row("select * from pages where id = ?", id)
+    existing = mochi.db.row("select * from pages where id=?", id)
 
     if not existing:
         # Page doesn't exist locally - create it
@@ -1166,7 +1230,7 @@ def event_page_update(e):
             return
 
         # Update page
-        mochi.db.query("update pages set page = ?, title = ?, content = ?, author = ?, updated = ?, version = ? where id = ?",
+        mochi.db.query("update pages set page=?, title=?, content=?, author=?, updated=?, version=? where id=?",
             page, title, content, author, updated, version, id)
 
     # Create revision record
@@ -1185,7 +1249,7 @@ def event_page_delete(e):
         return
 
     # Check if page exists
-    existing = mochi.db.row("select * from pages where id = ?", id)
+    existing = mochi.db.row("select * from pages where id=?", id)
     if not existing:
         return
 
@@ -1194,7 +1258,7 @@ def event_page_delete(e):
         return
 
     # Soft delete
-    mochi.db.query("update pages set deleted = ?, version = ? where id = ?", deleted, version, id)
+    mochi.db.query("update pages set deleted=?, version=? where id=?", deleted, version, id)
 
 # Receive redirect/set event
 def event_redirect_set(e):
@@ -1225,7 +1289,7 @@ def event_redirect_delete(e):
     if not source:
         return
 
-    mochi.db.query("delete from redirects where wiki = ? and source = ?", wiki, source)
+    mochi.db.query("delete from redirects where wiki=? and source=?", wiki, source)
 
 # Receive tag/add event
 def event_tag_add(e):
@@ -1237,7 +1301,7 @@ def event_tag_add(e):
         return
 
     # Check if page exists
-    if not mochi.db.exists("select 1 from pages where id = ?", page):
+    if not mochi.db.exists("select 1 from pages where id=?", page):
         return
 
     # Insert tag (ignore if already exists)
@@ -1252,7 +1316,7 @@ def event_tag_remove(e):
     if not page or not tag:
         return
 
-    mochi.db.query("delete from tags where page = ? and tag = ?", page, tag)
+    mochi.db.query("delete from tags where page=? and tag=?", page, tag)
 
 # Receive setting/set event
 def event_setting_set(e):
@@ -1269,7 +1333,7 @@ def event_setting_set(e):
 
     # Only allow known settings
     if name == "home":
-        mochi.db.query("update wikis set home = ? where id = ?", value, wiki)
+        mochi.db.query("update wikis set home=? where id=?", value, wiki)
 
 # SUBSCRIPTION
 
@@ -1303,12 +1367,12 @@ def event_sync(e):
         return
 
     # Verify wiki exists
-    if not mochi.db.exists("select 1 from wikis where id = ?", wiki):
+    if not mochi.db.exists("select 1 from wikis where id=?", wiki):
         e.write({"status": "404", "error": "Wiki not found"})
         return
 
     # Generate full dump of all wiki data
-    pages = mochi.db.query("select * from pages where wiki = ?", wiki)
+    pages = mochi.db.query("select * from pages where wiki=?", wiki)
     pageids = [p["id"] for p in pages]
 
     revisions = []
@@ -1316,22 +1380,23 @@ def event_sync(e):
     if pageids:
         # Get revisions and tags for all pages in this wiki
         for pageid in pageids:
-            pagerevisions = mochi.db.query("select * from revisions where page = ?", pageid)
+            pagerevisions = mochi.db.query("select * from revisions where page=?", pageid)
             revisions.extend(pagerevisions)
-            pagetags = mochi.db.query("select * from tags where page = ?", pageid)
+            pagetags = mochi.db.query("select * from tags where page=?", pageid)
             tags.extend(pagetags)
 
-    redirects = mochi.db.query("select * from redirects where wiki = ?", wiki)
-    wikirow = mochi.db.row("select home from wikis where id = ?", wiki)
+    redirects = mochi.db.query("select * from redirects where wiki=?", wiki)
+    wikirow = mochi.db.row("select name, home from wikis where id=?", wiki)
 
     # Send dump as a single payload
     e.write({
         "status": "200",
+        "name": wikirow["name"] if wikirow else "",
+        "home": wikirow["home"] if wikirow else "home",
         "pages": pages,
         "revisions": revisions,
         "tags": tags,
         "redirects": redirects,
-        "home": wikirow["home"] if wikirow else "home"
     })
 
 # Helper: Import wiki dump from sync response
@@ -1342,7 +1407,7 @@ def import_sync_dump(wiki, dump):
     # Import pages
     pages = dump.get("pages", [])
     for p in pages:
-        existing = mochi.db.row("select version from pages where id = ?", p["id"])
+        existing = mochi.db.row("select version from pages where id=?", p["id"])
         if existing and existing["version"] >= p["version"]:
             continue
         mochi.db.query("replace into pages (id, wiki, page, title, content, author, created, updated, version, deleted) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1364,10 +1429,12 @@ def import_sync_dump(wiki, dump):
     for r in redirects:
         mochi.db.query("replace into redirects (wiki, source, target, created) values (?, ?, ?, ?)", wiki, r["source"], r["target"], r["created"])
 
-    # Import home setting
+    # Import wiki name and home setting
+    name = dump.get("name")
     home = dump.get("home")
-    if home:
-        mochi.db.query("update wikis set home = ? where id = ?", home, wiki)
+    if name or home:
+        mochi.db.query("update wikis set name=?, home=? where id=?",
+            name or "", home or "home", wiki)
 
     return True
 
@@ -1396,7 +1463,7 @@ def action_subscribe(a):
 
     return {"data": {"ok": True, "message": "Subscription request sent"}}
 
-# Request sync from another wiki participant
+# Request sync from upstream wiki
 def action_sync(a):
     if not a.user:
         a.error(401, "Not logged in")
@@ -1407,15 +1474,18 @@ def action_sync(a):
         a.error(404, "Wiki not found")
         return
 
-    # Get target wiki entity to sync from
-    target = a.input("target")
+    # Use target if specified, otherwise use the wiki's source
+    target = a.input("target") or wiki.get("source")
     if not target:
-        a.error(400, "Target wiki entity is required")
+        a.error(400, "No upstream wiki to sync from")
         return
+
+    # Use the user's identity as the "from" header for the stream request
+    from_entity = a.user.identity.id if a.user.identity else ""
 
     # Open stream to target and request sync
     stream = mochi.stream(
-        {"from": wiki["id"], "to": target, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": target, "service": "wiki", "event": "sync"},
         {}
     )
 
@@ -1463,7 +1533,7 @@ def action_attachment_upload(a):
         return
 
     # Get subscribers for notification
-    subscribers = mochi.db.query("select id from subscribers where wiki = ? and id != ?", wiki["id"], wiki["id"])
+    subscribers = mochi.db.query("select id from subscribers where wiki=? and id!=?", wiki["id"], wiki["id"])
 
     # Save uploaded attachments and notify subscribers
     attachments = mochi.attachment.save(wiki["id"], "files", [], [], subscribers)

@@ -368,3 +368,22 @@ export function useRevokeAccess() {
     },
   })
 }
+
+// Join a remote wiki
+
+interface JoinWikiResponse {
+  id: string
+  name: string
+  message: string
+}
+
+export function useJoinWiki() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (target: string) =>
+      requestHelpers.post<JoinWikiResponse>(endpoints.wiki.join, { target }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wiki', 'info'] })
+    },
+  })
+}

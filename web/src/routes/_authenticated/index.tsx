@@ -3,7 +3,7 @@ import { requestHelpers } from '@/lib/request'
 import endpoints from '@/api/endpoints'
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, BookOpen } from 'lucide-react'
+import { Plus, BookOpen, Link2 } from 'lucide-react'
 import { usePage } from '@/hooks/use-wiki'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -104,13 +104,21 @@ function WikisListPage({ wikis }: { wikis?: Array<{ id: string; name: string; ho
   return (
     <div className="container mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Your Wikis</h1>
-        <Link to="/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Wiki
-          </Button>
-        </Link>
+        <h1 className="text-2xl font-bold">Wikis</h1>
+        <div className="flex gap-2">
+          <Link to="/join">
+            <Button variant="outline">
+              <Link2 className="mr-2 h-4 w-4" />
+              Join wiki
+            </Button>
+          </Link>
+          <Link to="/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create wiki
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {wikis && wikis.length > 0 ? (
@@ -136,14 +144,22 @@ function WikisListPage({ wikis }: { wikis?: Array<{ id: string; name: string; ho
           <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">No wikis yet</h2>
           <p className="text-muted-foreground mb-4">
-            Create your first wiki to get started.
+            Create a new wiki or join an existing one to get started.
           </p>
-          <Link to="/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Wiki
-            </Button>
-          </Link>
+          <div className="flex gap-2 justify-center">
+            <Link to="/join">
+              <Button variant="outline">
+                <Link2 className="mr-2 h-4 w-4" />
+                Join wiki
+              </Button>
+            </Link>
+            <Link to="/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create wiki
+              </Button>
+            </Link>
+          </div>
         </Card>
       )}
     </div>
