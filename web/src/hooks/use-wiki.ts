@@ -12,6 +12,7 @@ import type {
   TagPagesResponse,
   TagAddResponse,
   TagRemoveResponse,
+  ChangesResponse,
   SearchResponse,
   SettingsResponse,
   SettingsSetResponse,
@@ -164,6 +165,15 @@ export function useTagPages(tag: string) {
     queryFn: () =>
       requestHelpers.get<TagPagesResponse>(endpoints.wiki.tagPages(tag)),
     enabled: !!tag,
+  })
+}
+
+// Recent changes
+
+export function useChanges() {
+  return useQuery({
+    queryKey: ['wiki', 'changes'],
+    queryFn: () => requestHelpers.get<ChangesResponse>(endpoints.wiki.changes),
   })
 }
 

@@ -66,6 +66,22 @@ export interface PageRevisionResponse {
   current_version: number
 }
 
+// Recent changes
+export interface Change {
+  id: string
+  slug: string
+  title: string
+  author: string
+  name: string
+  created: number
+  version: number
+  comment: string
+}
+
+export interface ChangesResponse {
+  changes: Change[]
+}
+
 export interface PageRevertResponse {
   slug: string
   version: number

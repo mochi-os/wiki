@@ -4,6 +4,7 @@ import {
   Search,
   FilePlus,
   Tags,
+  History,
   Settings as SettingsIcon,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
@@ -27,6 +28,11 @@ export const sidebarData: SidebarData = {
           title: 'Tags',
           url: APP_ROUTES.WIKI.TAGS,
           icon: Tags,
+        },
+        {
+          title: 'Recent changes',
+          url: APP_ROUTES.WIKI.CHANGES,
+          icon: History,
         },
       ],
     },

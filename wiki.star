@@ -830,6 +830,39 @@ def action_tag_pages(a):
 
     return {"data": {"tag": tag, "pages": pages}}
 
+# Recent changes across the wiki
+def action_changes(a):
+    wiki = get_wiki(a)
+    if not wiki:
+        a.error(404, "Wiki not found")
+        return
+
+    if not check_access(a, wiki["id"], "view"):
+        a.error(403, "Access denied")
+        return
+
+    # Get recent revisions with page info
+    changes = mochi.db.query("""
+        select r.id, r.title, r.author, r.name, r.created, r.version, r.comment,
+               p.page as slug
+        from revisions r
+        join pages p on p.id=r.page
+        where p.wiki=? and p.deleted=0
+        order by r.created desc
+        limit 100
+    """, wiki["id"])
+
+    # Resolve author names where not stored
+    for change in changes:
+        if not change["name"]:
+            name = mochi.entity.name(change["author"])
+            if name:
+                change["name"] = name
+            else:
+                change["name"] = change["author"][:12] + "..."
+
+    return {"data": {"changes": changes}}
+
 # Create or update a redirect
 def action_redirect_set(a):
     if not a.user:

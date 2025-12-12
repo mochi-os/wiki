@@ -5,6 +5,7 @@ export const APP_ROUTES = {
     SEARCH: '/search',
     NEW: '/new',
     TAGS: '/tags',
+    CHANGES: '/changes',
     SETTINGS: '/settings',
     REDIRECTS: '/redirects',
   },

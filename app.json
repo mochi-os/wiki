@@ -44,6 +44,7 @@
 		":wiki/-/delete": {"function": "action_delete"},
 		":wiki/-/tags": {"function": "action_tags", "public": true},
 		":wiki/-/tag/:tag": {"function": "action_tag_pages", "public": true},
+		":wiki/-/changes": {"function": "action_changes", "public": true},
 		":wiki/-/redirect/set": {"function": "action_redirect_set"},
 		":wiki/-/redirect/delete": {"function": "action_redirect_delete"},
 		":wiki/-/redirects": {"function": "action_redirects", "public": true},

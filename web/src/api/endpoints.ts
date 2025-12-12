@@ -24,6 +24,8 @@ const endpoints = {
     tagRemove: (slug: string) => `${slug}/tag/remove`,
     tags: 'tags',
     tagPages: (tag: string) => `tag/${tag}`,
+    // Recent changes
+    changes: 'changes',
     // Redirects
     redirects: 'redirects',
     redirectSet: 'redirect/set',
