@@ -252,7 +252,7 @@ function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
             Create a new wiki, join an existing one, or bookmark a wiki to follow.
           </p>
           <div className="flex gap-2 justify-center">
-            <Button variant="ghost" className="hover:bg-[#FFF8F0]" onClick={() => setBookmarkDialogOpen(true)}>
+            <Button variant="outline" className="hover:bg-highlight" onClick={() => setBookmarkDialogOpen(true)}>
               <Bookmark className="mr-2 h-4 w-4" />
               Bookmark wiki
             </Button>
