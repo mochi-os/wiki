@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAuthStore } from '@mochi/common'
-import { AuthenticatedLayout } from '@/components/layout/authenticated-layout'
+import { useAuthStore, AuthenticatedLayout } from '@mochi/common'
+import { sidebarData } from '@/components/layout/data/sidebar-data'
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: () => {
@@ -14,5 +14,5 @@ export const Route = createFileRoute('/_authenticated')({
 
     return
   },
-  component: AuthenticatedLayout,
+  component: () => <AuthenticatedLayout title="Wiki" sidebarData={sidebarData} />,
 })

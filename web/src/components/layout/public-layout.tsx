@@ -6,9 +6,10 @@ import {
   SidebarInset,
   SidebarProvider,
   TopBar,
+  AppSidebar,
 } from '@mochi/common'
 import { SearchProvider } from '@/context/search-provider'
-import { AppSidebar } from '@/components/layout/app-sidebar'
+import { sidebarData } from './data/sidebar-data'
 
 type PublicLayoutProps = {
   children?: React.ReactNode
@@ -23,7 +24,7 @@ export function PublicLayout({ children }: PublicLayoutProps) {
         <div className="flex h-svh flex-col">
           <TopBar title="Wiki" />
           <SidebarProvider defaultOpen={defaultOpen} className="flex-1 overflow-hidden">
-            <AppSidebar />
+            <AppSidebar data={sidebarData} />
             <SidebarInset
               className={cn(
                 // Set content container, so we can use container queries
