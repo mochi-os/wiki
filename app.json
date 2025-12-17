@@ -15,8 +15,7 @@
 		"schema": 5,
 		"file": "wiki.db",
 		"create": {"function": "database_create"},
-		"upgrade": {"function": "database_upgrade"},
-		"helpers": ["access", "attachments"]
+		"upgrade": {"function": "database_upgrade"}
 	},
 
 	"icons": [
