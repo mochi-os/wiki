@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import type { Session } from '@/types/account'
 import { Loader2, LogOut } from 'lucide-react'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { toast } from 'sonner'
 import { useAccountData, useRevokeSession } from '@/hooks/use-account'
 import {
@@ -110,6 +111,7 @@ function SessionRow({
 }
 
 export function UserSessions() {
+  usePageTitle('Sessions')
   const { data, isLoading, error } = useAccountData()
 
   if (error) {

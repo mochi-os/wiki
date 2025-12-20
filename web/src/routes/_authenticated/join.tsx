@@ -6,6 +6,7 @@ import { Button } from '@mochi/common'
 import { Input } from '@mochi/common'
 import { Label } from '@mochi/common'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@mochi/common'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
 import { useJoinWiki } from '@/hooks/use-wiki'
@@ -15,6 +16,7 @@ export const Route = createFileRoute('/_authenticated/join')({
 })
 
 function JoinWikiPage() {
+  usePageTitle('Join Wiki')
   const navigate = useNavigate()
   const [target, setTarget] = useState('')
   const joinWiki = useJoinWiki()

@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTags } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { TagsList, TagsListSkeleton } from '@/features/wiki/tags-list'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -9,6 +10,7 @@ export const Route = createFileRoute('/_authenticated/tags')({
 })
 
 function TagsRoute() {
+  usePageTitle('All Tags')
   const { data, isLoading, error } = useTags()
 
   if (isLoading) {

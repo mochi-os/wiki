@@ -21,22 +21,26 @@ export function PublicLayout({ children }: PublicLayoutProps) {
   return (
     <SearchProvider>
       <LayoutProvider>
-        <div className="flex h-svh flex-col">
-          <TopBar title="Wiki" />
-          <SidebarProvider defaultOpen={defaultOpen} className="flex-1 overflow-hidden">
-            <AppSidebar data={sidebarData} />
-            <SidebarInset
+        <SidebarProvider defaultOpen={defaultOpen}>
+          <div className="flex h-svh w-full">
+            {/* Left column: TopBar + Sidebar */}
+            <div
               className={cn(
-                // Set content container, so we can use container queries
-                '@container/content',
-                // Allow scrolling in content area
-                'overflow-auto'
+                'flex flex-col flex-shrink-0 overflow-visible',
+                'w-(--sidebar-width) has-data-[state=collapsed]:w-(--sidebar-width-icon)',
+                'transition-[width] duration-200 ease-linear'
               )}
             >
+              <TopBar showNotifications={false} />
+              <AppSidebar data={sidebarData} />
+            </div>
+
+            {/* Content area */}
+            <SidebarInset className={cn('@container/content', 'overflow-auto')}>
               {children ?? <Outlet />}
             </SidebarInset>
-          </SidebarProvider>
-        </div>
+          </div>
+        </SidebarProvider>
       </LayoutProvider>
     </SearchProvider>
   )

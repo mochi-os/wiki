@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { WikiSettings } from '@/features/wiki/wiki-settings'
 import { WikiProvider } from '@/context/wiki-context'
 import { Header } from '@mochi/common'
@@ -9,6 +10,7 @@ export const Route = createFileRoute('/_authenticated/settings')({
 })
 
 function WikiSettingsRoute() {
+  usePageTitle('Wiki Settings')
   return (
     <>
       <Header />

@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { Activity } from 'lucide-react'
 import { useSystemSettingsData } from '@/hooks/use-system-settings'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { Skeleton } from '@mochi/common'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -12,6 +13,7 @@ function formatTimestamp(value: string): string {
 }
 
 export function SystemStatus() {
+  usePageTitle('Status')
   const { data, isLoading, error } = useSystemSettingsData()
 
   if (error) {

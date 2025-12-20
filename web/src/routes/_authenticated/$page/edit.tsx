@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { usePage } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { PageEditor, PageEditorSkeleton } from '@/features/wiki/page-editor'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -22,6 +23,8 @@ function WikiPageEditRoute() {
   const params = Route.useParams()
   const slug = params.page
   const { data, isLoading, error } = usePage(slug)
+  const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : slug
+  usePageTitle(`Edit: ${pageTitle}`)
 
   if (isLoading) {
     return (

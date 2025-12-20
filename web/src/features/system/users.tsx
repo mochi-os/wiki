@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import type { User, Session } from '@/types/users'
 import {
   Ban,
@@ -534,6 +535,7 @@ function SortableHeader({
 }
 
 export function SystemUsers() {
+  usePageTitle('Users')
   const [search, setSearch] = useState('')
   const [limit, setLimit] = useState(25)
   const [offset, setOffset] = useState(0)

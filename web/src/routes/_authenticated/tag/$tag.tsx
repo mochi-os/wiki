@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTagPages } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { TagPages, TagPagesSkeleton } from '@/features/wiki/tag-pages'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -11,6 +12,7 @@ export const Route = createFileRoute('/_authenticated/tag/$tag')({
 function TagPagesRoute() {
   const params = Route.useParams()
   const tag = params.tag
+  usePageTitle(`Tag: ${tag}`)
   const { data, isLoading, error } = useTagPages(tag)
 
   if (isLoading) {

@@ -9,6 +9,7 @@ import { Button } from '@mochi/common'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, BookOpen, Link2, Bookmark, X } from 'lucide-react'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { usePage, useAddBookmark, useRemoveBookmark } from '@/hooks/use-wiki'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -59,6 +60,8 @@ function IndexPage() {
 
 function WikiHomePage({ homeSlug }: { homeSlug: string }) {
   const { data, isLoading, error } = usePage(homeSlug)
+  const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : 'Home'
+  usePageTitle(pageTitle)
 
   if (isLoading) {
     return (
@@ -121,6 +124,7 @@ interface WikisListPageProps {
 }
 
 function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
+  usePageTitle('Wikis')
   const [bookmarkTarget, setBookmarkTarget] = useState('')
   const [bookmarkDialogOpen, setBookmarkDialogOpen] = useState(false)
   const addBookmark = useAddBookmark()

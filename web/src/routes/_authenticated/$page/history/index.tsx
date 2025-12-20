@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { usePageHistory } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { PageHistory, PageHistorySkeleton } from '@/features/wiki/page-history'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -11,6 +12,7 @@ export const Route = createFileRoute('/_authenticated/$page/history/')({
 function PageHistoryRoute() {
   const params = Route.useParams()
   const slug = params.page
+  usePageTitle(`History: ${slug}`)
   const { data, isLoading, error } = usePageHistory(slug)
 
   if (isLoading) {

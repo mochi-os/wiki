@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { usePage } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { DeletePage } from '@/features/wiki/delete-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -13,6 +14,8 @@ function DeletePageRoute() {
   const params = Route.useParams()
   const slug = params.page
   const { data, isLoading, error } = usePage(slug)
+  const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : slug
+  usePageTitle(`Delete: ${pageTitle}`)
 
   if (isLoading) {
     return (

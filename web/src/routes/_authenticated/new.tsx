@@ -8,6 +8,7 @@ import { Button } from '@mochi/common'
 import { Input } from '@mochi/common'
 import { Label } from '@mochi/common'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@mochi/common'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { PageEditor } from '@/features/wiki/page-editor'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -50,6 +51,7 @@ function NewRoute() {
 }
 
 function NewPageView() {
+  usePageTitle('New Page')
   const { slug } = Route.useSearch()
 
   return (
@@ -63,6 +65,7 @@ function NewPageView() {
 }
 
 function NewWikiView() {
+  usePageTitle('Create Wiki')
   const navigate = useNavigate()
   const [name, setName] = useState('')
 

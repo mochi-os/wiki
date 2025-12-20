@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useChanges } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { ChangesList, ChangesListSkeleton } from '@/features/wiki/changes-list'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -9,6 +10,7 @@ export const Route = createFileRoute('/_authenticated/changes')({
 })
 
 function ChangesRoute() {
+  usePageTitle('Recent Changes')
   const { data, isLoading, error } = useChanges()
 
   if (isLoading) {

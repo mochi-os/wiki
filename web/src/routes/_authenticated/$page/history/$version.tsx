@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { usePageRevision } from '@/hooks/use-wiki'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { RevisionView, RevisionViewSkeleton } from '@/features/wiki/revision-view'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -12,6 +13,7 @@ function RevisionViewRoute() {
   const params = Route.useParams()
   const slug = params.page
   const version = parseInt(params.version, 10)
+  usePageTitle(`${slug} v${version}`)
 
   const { data, isLoading, error } = usePageRevision(slug, version)
 

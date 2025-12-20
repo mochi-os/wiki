@@ -14,5 +14,5 @@ export const Route = createFileRoute('/_authenticated')({
 
     return
   },
-  component: () => <AuthenticatedLayout title="Wiki" sidebarData={sidebarData} />,
+  component: () => <AuthenticatedLayout sidebarData={sidebarData} />,
 })

@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { SearchPage } from '@/features/wiki/search-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -14,6 +15,7 @@ export const Route = createFileRoute('/_authenticated/search')({
 })
 
 function SearchRoute() {
+  usePageTitle('Search')
   const { q } = Route.useSearch()
 
   return (

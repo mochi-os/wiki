@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
+import { usePageTitle } from '@/hooks/usePageTitle'
 import { RevertPage } from '@/features/wiki/revert-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
@@ -17,6 +18,7 @@ function RevertPageRoute() {
   const params = Route.useParams()
   const { version } = Route.useSearch()
   const slug = params.page
+  usePageTitle(`Revert: ${slug}`)
 
   if (!version || version < 1) {
     return (

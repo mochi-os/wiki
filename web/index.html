@@ -8,7 +8,9 @@
         var path = window.location.pathname;
         var match = path.match(/^(\/wiki\/[^/]+\/|\/[^/]+\/)/);
         if (match) {
-          document.write('<base href="' + match[1] + '">');
+          var baseEl = document.createElement('base');
+          baseEl.href = match[1];
+          document.head.appendChild(baseEl);
         }
       })();
     </script>
