@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
@@ -8,28 +8,23 @@ import {
   Plus,
   X,
   Shield,
-  ShieldCheck,
-  ShieldX,
   CornerDownRight,
   ArrowRight,
   Home,
   RefreshCw,
   Users,
 } from 'lucide-react'
-import { getAppPath } from '@mochi/common'
-import { Button } from '@mochi/common'
-import { Input } from '@mochi/common'
-import { Label } from '@mochi/common'
-import { Separator } from '@mochi/common'
-import { Skeleton } from '@mochi/common'
 import {
+  getAppPath,
+  Button,
+  Input,
+  Label,
+  Skeleton,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@mochi/common'
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -39,8 +34,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@mochi/common'
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,33 +41,26 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@mochi/common'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@mochi/common'
-import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
+  cn,
+  AccessDialog,
+  AccessList,
+  type AccessLevel,
+  requestHelpers,
 } from '@mochi/common'
-import { Badge } from '@mochi/common'
-import { cn } from '@mochi/common'
+import endpoints from '@/api/endpoints'
 import {
   useWikiSettings,
   useSetWikiSetting,
   useSyncWiki,
   useDeleteWiki,
-  useAccessRules,
-  useGrantAccess,
-  useDenyAccess,
-  useRevokeAccess,
+  useUserSearch,
+  useGroups,
   useSubscribers,
   useRemoveSubscriber,
   useRedirects,
@@ -82,7 +68,6 @@ import {
   useDeleteRedirect,
 } from '@/hooks/use-wiki'
 import { useWikiContext } from '@/context/wiki-context'
-import type { AccessRule } from '@/types/wiki'
 
 type TabId = 'general' | 'access' | 'redirects' | 'subscribers' | 'delete'
 
@@ -295,212 +280,112 @@ function GeneralTab() {
   )
 }
 
-// Subject type labels for display
-const SUBJECT_LABELS: Record<string, string> = {
-  '*': 'Anyone, including anonymous',
-  '+': 'Authenticated users',
-  '#user': 'All users with a role',
-  '#administrator': 'Administrators',
-}
-
-// Operation labels
-const OPERATION_LABELS: Record<string, string> = {
-  view: 'View',
-  edit: 'Edit',
-  delete: 'Delete',
-  manage: 'Manage',
-  '*': 'All operations',
-}
-
-function formatSubject(subject: string): string {
-  if (SUBJECT_LABELS[subject]) {
-    return SUBJECT_LABELS[subject]
-  }
-  if (subject.startsWith('@')) {
-    return `Group: ${subject.slice(1)}`
-  }
-  if (subject.length > 20) {
-    return `${subject.slice(0, 8)}...${subject.slice(-8)}`
-  }
-  return subject
-}
+// Wiki access levels (hierarchical: edit > view > none)
+const WIKI_ACCESS_LEVELS: AccessLevel[] = [
+  { value: 'edit', label: 'Edit and view' },
+  { value: 'view', label: 'View only' },
+  { value: 'none', label: 'No access' },
+]
 
 function AccessTab() {
-  const { data, isLoading, error } = useAccessRules()
-  const grantAccess = useGrantAccess()
-  const denyAccess = useDenyAccess()
-  const revokeAccess = useRevokeAccess()
+  const { data: groupsData } = useGroups()
 
-  const [newSubject, setNewSubject] = useState('')
-  const [newOperation, setNewOperation] = useState('view')
-  const [newType, setNewType] = useState<'allow' | 'deny'>('allow')
+  const [rules, setRules] = useState<import('@/types/wiki').AccessRule[]>([])
+  const [owner, setOwner] = useState<import('@/types/wiki').AccessOwner | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
 
-  const handleAdd = () => {
-    if (!newSubject.trim()) {
-      toast.error('Subject is required')
-      return
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [userSearchQuery, setUserSearchQuery] = useState('')
+  const { data: userSearchData, isLoading: userSearchLoading } = useUserSearch(userSearchQuery)
+
+  const loadRules = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await requestHelpers.get<import('@/types/wiki').AccessListResponse>(
+        endpoints.wiki.access
+      )
+      setRules(response?.rules ?? [])
+      setOwner(response?.owner ?? null)
+    } catch (err) {
+      console.error('[AccessTab] Failed to load rules', err)
+      setError(err instanceof Error ? err : new Error('Failed to load access rules'))
+    } finally {
+      setIsLoading(false)
     }
+  }, [])
 
-    const mutation = newType === 'allow' ? grantAccess : denyAccess
-    mutation.mutate(
-      { subject: newSubject.trim(), operation: newOperation },
-      {
-        onSuccess: () => {
-          toast.success('Access rule added')
-          setNewSubject('')
-        },
-        onError: (error) => {
-          toast.error(error.message || 'Failed to add access rule')
-        },
-      }
-    )
+  useEffect(() => {
+    void loadRules()
+  }, [loadRules])
+
+  const handleAdd = async (subject: string, subjectName: string, level: string) => {
+    try {
+      await requestHelpers.post(endpoints.wiki.accessSet, { subject, level })
+      toast.success(`Access set for ${subjectName}`)
+      void loadRules()
+    } catch (err) {
+      console.error('[AccessTab] Failed to set access level', err)
+      toast.error('Failed to set access level')
+      throw err
+    }
   }
 
-  const handleRevoke = (rule: AccessRule) => {
-    revokeAccess.mutate(
-      { subject: rule.subject, operation: rule.operation },
-      {
-        onSuccess: () => {
-          toast.success('Access rule removed')
-        },
-        onError: (error) => {
-          toast.error(error.message || 'Failed to remove access rule')
-        },
-      }
-    )
+  const handleLevelChange = async (subject: string, level: string) => {
+    try {
+      await requestHelpers.post(endpoints.wiki.accessSet, { subject, level })
+      toast.success('Access updated')
+      void loadRules()
+    } catch (err) {
+      console.error('[AccessTab] Failed to update access level', err)
+      toast.error('Failed to update access level')
+    }
+  }
+
+  const handleRevoke = async (subject: string) => {
+    try {
+      await requestHelpers.post(endpoints.wiki.accessRevoke, { subject })
+      toast.success('Access removed')
+      void loadRules()
+    } catch (err) {
+      console.error('[AccessTab] Failed to revoke access', err)
+      toast.error('Failed to remove access')
+    }
   }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Access Control</CardTitle>
-        <CardDescription>
-          Control who can view, edit, delete, and manage this wiki. Enter a user
-          identity, <code className="text-xs">@group</code> for the name of a group,{' '}
-          <code className="text-xs">+</code> for all authenticated users, or{' '}
-          <code className="text-xs">*</code> for anyone.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Add new rule */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex-1 min-w-[200px] space-y-1.5">
-            <Label htmlFor="subject">Subject</Label>
-            <Input
-              id="subject"
-              value={newSubject}
-              onChange={(e) => setNewSubject(e.target.value)}
-              placeholder="User id, @group, +, or *"
-            />
-          </div>
-          <div className="w-32 space-y-1.5">
-            <Label htmlFor="operation">Operation</Label>
-            <Select value={newOperation} onValueChange={setNewOperation}>
-              <SelectTrigger id="operation">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="view">View</SelectItem>
-                <SelectItem value="edit">Edit</SelectItem>
-                <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="manage">Manage</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="w-28 space-y-1.5">
-            <Label htmlFor="type">Type</Label>
-            <Select value={newType} onValueChange={(v) => setNewType(v as 'allow' | 'deny')}>
-              <SelectTrigger id="type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="allow">Allow</SelectItem>
-                <SelectItem value="deny">Deny</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            onClick={handleAdd}
-            disabled={grantAccess.isPending || denyAccess.isPending}
-          >
-            <Plus className="h-4 w-4 mr-1" />
+      <CardContent className="pt-6 space-y-4">
+        {/* Add access button - right aligned */}
+        <div className="flex justify-end">
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
             Add
           </Button>
         </div>
 
-        <Separator />
+        <AccessDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          onAdd={handleAdd}
+          levels={WIKI_ACCESS_LEVELS}
+          defaultLevel="edit"
+          userSearchResults={userSearchData?.results ?? []}
+          userSearchLoading={userSearchLoading}
+          onUserSearch={setUserSearchQuery}
+          groups={groupsData?.groups ?? []}
+        />
 
-        {/* Rules table */}
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : error ? (
-          <div className="text-destructive text-sm">
-            Error loading access rules: {error.message}
-          </div>
-        ) : data?.rules && data.rules.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Subject</TableHead>
-                <TableHead>Operation</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {[...data.rules]
-                .sort((a, b) => {
-                  // Sort order: user IDs, @groups, +, *
-                  const priority = (s: string) => {
-                    if (s === '*') return 3
-                    if (s === '+') return 2
-                    if (s.startsWith('@') || s.startsWith('#')) return 1
-                    return 0
-                  }
-                  return priority(a.subject) - priority(b.subject)
-                })
-                .map((rule) => (
-                <TableRow key={rule.id}>
-                  <TableCell className="font-mono text-sm">
-                    {formatSubject(rule.subject)}
-                  </TableCell>
-                  <TableCell>{OPERATION_LABELS[rule.operation] || rule.operation}</TableCell>
-                  <TableCell>
-                    {rule.grant === 1 ? (
-                      <Badge variant="default" className="bg-green-600">
-                        <ShieldCheck className="h-3 w-3 mr-1" />
-                        Allow
-                      </Badge>
-                    ) : (
-                      <Badge variant="destructive">
-                        <ShieldX className="h-3 w-3 mr-1" />
-                        Deny
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRevoke(rule)}
-                      disabled={revokeAccess.isPending}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            No access rules configured. Add rules to control who can access this wiki.
-          </p>
-        )}
+        <AccessList
+          rules={rules}
+          levels={WIKI_ACCESS_LEVELS}
+          onLevelChange={handleLevelChange}
+          onRevoke={handleRevoke}
+          isLoading={isLoading}
+          error={error}
+          owner={owner}
+        />
       </CardContent>
     </Card>
   )

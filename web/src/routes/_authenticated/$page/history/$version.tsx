@@ -1,9 +1,11 @@
+import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { usePageRevision } from '@/hooks/use-wiki'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import { RevisionView, RevisionViewSkeleton } from '@/features/wiki/revision-view'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
+import { useSidebarContext } from '@/context/sidebar-context'
 
 export const Route = createFileRoute('/_authenticated/$page/history/$version')({
   component: RevisionViewRoute,
@@ -14,6 +16,13 @@ function RevisionViewRoute() {
   const slug = params.page
   const version = parseInt(params.version, 10)
   usePageTitle(`${slug} v${version}`)
+
+  // Register page with sidebar context for tree expansion
+  const { setPage } = useSidebarContext()
+  useEffect(() => {
+    setPage(slug)
+    return () => setPage(null)
+  }, [slug, setPage])
 
   const { data, isLoading, error } = usePageRevision(slug, version)
 

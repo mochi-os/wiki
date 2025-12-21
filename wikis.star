@@ -49,6 +49,24 @@ def database_upgrade(version):
     elif version == 5:
         # Add seen column to track subscriber activity
         mochi.db.execute("alter table subscribers add column seen integer not null default 0")
+    elif version == 6:
+        # Clean up legacy access rules that are no longer needed
+        # Owner is now determined from entity.creator, not from access rules
+        wikis = mochi.db.rows("select id from wikis")
+        for wiki in wikis:
+            resource = "wiki/" + wiki["id"]
+            entity = mochi.entity.info(wiki["id"])
+            owner_id = entity.get("creator") if entity else None
+            rules = mochi.access.list.resource(resource)
+            for rule in rules:
+                subject = rule.get("subject", "")
+                operation = rule.get("operation", "")
+                # Remove #administrator rules (legacy placeholder)
+                if subject == "#administrator" and operation:
+                    mochi.access.revoke(subject, resource, operation)
+                # Remove owner rules (owner now has implicit full access)
+                if owner_id and subject == owner_id and operation:
+                    mochi.access.revoke(subject, resource, operation)
 
 # Helper: Update subscriber's seen timestamp
 def update_subscriber_seen(wiki, subscriber_id):
@@ -62,32 +80,70 @@ def get_wiki(a):
         return None
     return mochi.db.row("select * from wikis where id=?", wiki)
 
+# Access level hierarchy: edit > view
+# Each level grants access to that operation and all operations below it.
+# "edit" includes delete capability.
+# "none" explicitly blocks all access (stored as deny rules for all levels).
+# "manage" is separate and grants all permissions (typically owner-only).
+ACCESS_LEVELS = ["view", "edit"]
+
 # Helper: Check if current user has access to perform an operation
-# Users with "manage" permission automatically have all other permissions
+# Uses hierarchical access levels: edit grants view, view is base level.
+# Users with "manage" or "*" permission automatically have all permissions.
+# The "delete" operation is treated as "edit" (edit includes delete).
 def check_access(a, wiki_id, operation, page=None):
     resource = "wiki/" + wiki_id
-    if page:
-        resource = resource + "/page/" + page
     user = None
     if a.user and a.user.identity:
         user = a.user.identity.id
-    if mochi.access.check(user, resource, operation):
+
+    # Owner has full access (mochi.entity.get returns entity only if current user owns it)
+    if mochi.entity.get(wiki_id):
         return True
-    # If checking a non-manage operation, also check if user has manage access
-    if operation != "manage":
-        return mochi.access.check(user, resource, "manage")
+
+    # Manage or wildcard grants full access
+    if mochi.access.check(user, resource, "manage") or mochi.access.check(user, resource, "*"):
+        return True
+
+    # Map "delete" to "edit" (edit includes delete capability)
+    if operation == "delete":
+        operation = "edit"
+
+    # For hierarchical levels, check if user has the required level or higher
+    # ACCESS_LEVELS is ordered lowest to highest: ["view", "edit"]
+    if operation in ACCESS_LEVELS:
+        op_index = ACCESS_LEVELS.index(operation)
+        for level in ACCESS_LEVELS[op_index:]:
+            if mochi.access.check(user, resource, level):
+                return True
+
     return False
 
 # Helper: Check if remote user (from event header) has access to perform an operation
+# Uses same hierarchical levels as check_access.
 def check_event_access(user_id, wiki_id, operation, page=None):
     resource = "wiki/" + wiki_id
-    if page:
-        resource = resource + "/page/" + page
-    if mochi.access.check(user_id, resource, operation):
+
+    # Owner has full access - check if entity exists locally (we own it)
+    entity = mochi.entity.get(wiki_id)
+    if entity:
         return True
-    # If checking a non-manage operation, also check if user has manage access
-    if operation != "manage":
-        return mochi.access.check(user_id, resource, "manage")
+
+    # Manage or wildcard grants full access
+    if mochi.access.check(user_id, resource, "manage") or mochi.access.check(user_id, resource, "*"):
+        return True
+
+    # Map "delete" to "edit" (edit includes delete capability)
+    if operation == "delete":
+        operation = "edit"
+
+    # For hierarchical levels, check if user has the required level or higher
+    if operation in ACCESS_LEVELS:
+        op_index = ACCESS_LEVELS.index(operation)
+        for level in ACCESS_LEVELS[op_index:]:
+            if mochi.access.check(user_id, resource, level):
+                return True
+
     return False
 
 # Helper: Validate that event sender is authorized to push updates
@@ -112,7 +168,7 @@ def broadcast_event(wiki, event, data, exclude=None):
         if exclude and sub["id"] == exclude:
             continue
         mochi.message.send(
-            {"from": wiki, "to": sub["id"], "service": "wiki", "event": event},
+            {"from": wiki, "to": sub["id"], "service": "wikis", "event": event},
             data
         )
 
@@ -176,7 +232,7 @@ def fetch_remote_wiki_info(a, wiki_id):
         from_entity = a.user.identity.id
 
     stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -188,6 +244,10 @@ def fetch_remote_wiki_info(a, wiki_id):
         return {"error": "offline"}
 
     status = dump.get("status")
+    if not status:
+        return {"error": "offline"}
+    if status == "400":
+        return {"error": dump.get("error", "bad_request")}
     if status == "403":
         return {"error": "access_denied"}
     if status == "404":
@@ -208,7 +268,7 @@ def fetch_remote_page(a, wiki_id, slug):
         from_entity = a.user.identity.id
 
     stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -220,6 +280,10 @@ def fetch_remote_page(a, wiki_id, slug):
         return {"error": "offline"}
 
     status = dump.get("status")
+    if not status:
+        return {"error": "offline"}
+    if status == "400":
+        return {"error": dump.get("error", "bad_request")}
     if status == "403":
         return {"error": "access_denied"}
     if status == "404":
@@ -228,10 +292,10 @@ def fetch_remote_page(a, wiki_id, slug):
         return {"error": dump.get("error", "unknown")}
 
     # Look for the page in the dump
-    pages = dump.get("pages", [])
+    pages = dump.get("pages") or []
 
     # First check for redirects
-    redirects = dump.get("redirects", [])
+    redirects = dump.get("redirects") or []
     for r in redirects:
         if r.get("source") == slug:
             slug = r.get("target")
@@ -243,7 +307,7 @@ def fetch_remote_page(a, wiki_id, slug):
             # Get tags for this page from the dump
             tags = []
             page_id = p.get("id")
-            for t in dump.get("tags", []):
+            for t in (dump.get("tags") or []):
                 if t.get("page") == page_id:
                     tags.append(t.get("tag"))
 
@@ -268,7 +332,7 @@ def fetch_remote_page_history(a, wiki_id, slug):
         from_entity = a.user.identity.id
 
     stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -280,6 +344,10 @@ def fetch_remote_page_history(a, wiki_id, slug):
         return {"error": "offline"}
 
     status = dump.get("status")
+    if not status:
+        return {"error": "offline"}
+    if status == "400":
+        return {"error": dump.get("error", "bad_request")}
     if status == "403":
         return {"error": "access_denied"}
     if status == "404":
@@ -288,14 +356,14 @@ def fetch_remote_page_history(a, wiki_id, slug):
         return {"error": dump.get("error", "unknown")}
 
     # First check for redirects
-    redirects = dump.get("redirects", [])
+    redirects = dump.get("redirects") or []
     for r in redirects:
         if r.get("source") == slug:
             slug = r.get("target")
             break
 
     # Find the page
-    pages = dump.get("pages", [])
+    pages = dump.get("pages") or []
     page = None
     for p in pages:
         if p.get("page") == slug:
@@ -308,7 +376,7 @@ def fetch_remote_page_history(a, wiki_id, slug):
     # Get revisions for this page
     page_id = page.get("id")
     revisions = []
-    for r in dump.get("revisions", []):
+    for r in (dump.get("revisions") or []):
         if r.get("page") == page_id:
             rev = {
                 "id": r.get("id"),
@@ -415,7 +483,7 @@ def action_join(a):
 
     # Sync data from the remote wiki first to get the name
     stream = mochi.stream(
-        {"from": from_entity, "to": source, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": source, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -450,7 +518,7 @@ def action_join(a):
 
     # Subscribe to the source wiki to receive updates
     mochi.message.send(
-        {"from": entity, "to": source, "service": "wiki", "event": "subscribe"},
+        {"from": entity, "to": source, "service": "wikis", "event": "subscribe"},
         {"name": name}
     )
 
@@ -485,7 +553,7 @@ def action_bookmark_add(a):
 
     # Fetch the wiki name from the remote
     stream = mochi.stream(
-        {"from": from_entity, "to": target, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": target, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -610,8 +678,8 @@ def action_info_entity(a):
                     return a.error(403, "Access denied to this wiki")
                 if error == "not_found":
                     return a.error(404, "Wiki not found")
-                if error == "offline":
-                    # Remote wiki unreachable, return cached bookmark info
+                if error == "offline" or error == "bad_request":
+                    # Remote wiki unreachable or invalid request, return cached bookmark info
                     fp = mochi.entity.fingerprint(wiki_id, True)
                     return {"data": {
                         "entity": True,
@@ -664,7 +732,12 @@ def action_info_entity(a):
 
     # Get fingerprint with hyphens for display
     fp = mochi.entity.fingerprint(wiki["id"], True)
-    return {"data": {"entity": True, "wiki": wiki, "permissions": permissions, "fingerprint": fp}}
+
+    # Also include all wikis and bookmarks for sidebar display
+    wikis = mochi.db.rows("select id, name, home, source, created from wikis order by name")
+    bookmarks = mochi.db.rows("select id, name, added from bookmarks order by name")
+
+    return {"data": {"entity": True, "wiki": wiki, "wikis": wikis, "bookmarks": bookmarks, "permissions": permissions, "fingerprint": fp}}
 
 # View a page
 def action_page(a):
@@ -689,7 +762,7 @@ def action_page(a):
                     return a.error(403, "Access denied to this wiki")
                 if error == "not_found":
                     return {"data": {"error": "not_found", "page": slug, "bookmark": True}}
-                if error == "offline":
+                if error == "offline" or error == "bad_request":
                     return a.error(503, "Wiki is offline")
                 return a.error(500, "Error accessing wiki: " + error)
 
@@ -803,7 +876,7 @@ def action_page_edit(a):
             }
             if source:
                 mochi.message.send(
-                    {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/create"},
+                    {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/create"},
                     event_data
                 )
             else:
@@ -828,7 +901,7 @@ def action_page_edit(a):
             }
             if source:
                 mochi.message.send(
-                    {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/update"},
+                    {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/update"},
                     event_data
                 )
             else:
@@ -853,7 +926,7 @@ def action_page_edit(a):
         }
         if source:
             mochi.message.send(
-                {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/create"},
+                {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/create"},
                 event_data
             )
         else:
@@ -886,7 +959,7 @@ def action_new(a):
         a.error(400, "Page URL too long (max 100 characters)")
         return
     # Validate slug characters (alphanumeric, hyphens, underscores, slashes)
-    for c in slug:
+    for c in slug.elems():
         if not (c.isalnum() or c in "-_/"):
             a.error(400, "Page URL can only contain letters, numbers, hyphens, underscores, and slashes")
             return
@@ -938,7 +1011,7 @@ def action_new(a):
     }
     if source:
         mochi.message.send(
-            {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/create"},
+            {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/create"},
             event_data
         )
     else:
@@ -969,7 +1042,7 @@ def action_page_history(a):
                     return a.error(403, "Access denied to this wiki")
                 if error == "not_found":
                     return a.error(404, "Page not found")
-                if error == "offline":
+                if error == "offline" or error == "bad_request":
                     return a.error(503, "Wiki is offline")
                 return a.error(500, "Error accessing wiki: " + error)
 
@@ -1125,7 +1198,7 @@ def action_page_revert(a):
     }
     if source:
         mochi.message.send(
-            {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/update"},
+            {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/update"},
             event_data
         )
     else:
@@ -1173,7 +1246,7 @@ def action_page_delete(a):
     }
     if source:
         mochi.message.send(
-            {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/delete"},
+            {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/delete"},
             event_data
         )
     else:
@@ -1216,7 +1289,7 @@ def action_tag_add(a):
         a.error(400, "Tag too long (max 50 characters)")
         return
     # Only allow alphanumeric, hyphens, and underscores
-    for c in tag:
+    for c in tag.elems():
         if not (c.isalnum() or c in "-_"):
             a.error(400, "Tags can only contain letters, numbers, hyphens, and underscores")
             return
@@ -1592,12 +1665,51 @@ def action_access_list(a):
         a.error(403, "Access denied")
         return
 
+    # Get owner - if we own this entity, use current user's info
+    owner = None
+    if mochi.entity.get(wiki["id"]):
+        # Current user is the owner
+        if a.user and a.user.identity:
+            owner = {"id": a.user.identity.id, "name": a.user.identity.name}
+
     resource = "wiki/" + wiki["id"]
     rules = mochi.access.list.resource(resource)
-    return {"data": {"rules": rules}}
 
-# Grant access to a subject
-def action_access_grant(a):
+    # Filter and resolve names for rules
+    filtered_rules = []
+    for rule in rules:
+        subject = rule.get("subject", "")
+        # Skip owner rules (owner always has full access)
+        if owner and subject == owner.get("id"):
+            continue
+        # Skip legacy #administrator rules
+        if subject == "#administrator":
+            continue
+        # Skip special subjects (*, +, #roles) for name resolution
+        if subject and subject not in ("*", "+") and not subject.startswith("#"):
+            if subject.startswith("@"):
+                # Look up group name
+                group_id = subject[1:]  # Remove @ prefix
+                group = mochi.group.get(group_id)
+                if group:
+                    rule["name"] = group.get("name", group_id)
+            elif mochi.valid(subject, "entity"):
+                # Try directory first (for user identities), then local entities
+                entry = mochi.directory.get(subject)
+                if entry:
+                    rule["name"] = entry.get("name", "")
+                else:
+                    entity = mochi.entity.info(subject)
+                    if entity:
+                        rule["name"] = entity.get("name", "")
+        filtered_rules.append(rule)
+
+    return {"data": {"rules": filtered_rules, "owner": owner}}
+
+# Set access level for a subject
+# Levels: "edit" (can edit, delete, view), "view" (can view only), "none" (explicitly blocked)
+# This revokes any existing rules for the subject first, then sets the new level.
+def action_access_set(a):
     if not a.user:
         a.error(401, "Not logged in")
         return
@@ -1612,8 +1724,7 @@ def action_access_grant(a):
         return
 
     subject = a.input("subject")
-    operation = a.input("operation")
-    page = a.input("page")
+    level = a.input("level")
 
     if not subject:
         a.error(400, "Subject is required")
@@ -1622,65 +1733,33 @@ def action_access_grant(a):
         a.error(400, "Subject too long")
         return
 
-    if not operation:
-        a.error(400, "Operation is required")
+    if not level:
+        a.error(400, "Level is required")
         return
 
-    if operation not in ["view", "edit", "delete", "manage", "*"]:
-        a.error(400, "Invalid operation")
-        return
-
-    resource = "wiki/" + wiki["id"]
-    if page:
-        resource = resource + "/page/" + page
-
-    granter = a.user.identity.id
-    mochi.access.allow(subject, resource, operation, granter)
-    return {"data": {"ok": True}}
-
-# Deny access to a subject
-def action_access_deny(a):
-    if not a.user:
-        a.error(401, "Not logged in")
-        return
-
-    wiki = get_wiki(a)
-    if not wiki:
-        a.error(404, "Wiki not found")
-        return
-
-    if not check_access(a, wiki["id"], "manage"):
-        a.error(403, "Access denied")
-        return
-
-    subject = a.input("subject")
-    operation = a.input("operation")
-    page = a.input("page")
-
-    if not subject:
-        a.error(400, "Subject is required")
-        return
-    if len(subject) > 255:
-        a.error(400, "Subject too long")
-        return
-
-    if not operation:
-        a.error(400, "Operation is required")
-        return
-
-    if operation not in ["view", "edit", "delete", "manage", "*"]:
-        a.error(400, "Invalid operation")
+    if level not in ["view", "edit", "none"]:
+        a.error(400, "Invalid level")
         return
 
     resource = "wiki/" + wiki["id"]
-    if page:
-        resource = resource + "/page/" + page
-
     granter = a.user.identity.id
-    mochi.access.deny(subject, resource, operation, granter)
-    return {"data": {"ok": True}}
 
-# Revoke an access rule
+    # First, revoke all existing rules for this subject (including wildcard)
+    for op in ACCESS_LEVELS + ["*"]:
+        mochi.access.revoke(subject, resource, op)
+
+    # Then set the new level
+    if level == "none":
+        # Store deny rules for all levels to block access
+        for op in ACCESS_LEVELS:
+            mochi.access.deny(subject, resource, op, granter)
+    else:
+        # Store a single allow rule for the level
+        mochi.access.allow(subject, resource, level, granter)
+
+    return {"data": {"success": True}}
+
+# Revoke all access from a subject (remove from access list entirely)
 def action_access_revoke(a):
     if not a.user:
         a.error(401, "Not logged in")
@@ -1696,8 +1775,6 @@ def action_access_revoke(a):
         return
 
     subject = a.input("subject")
-    operation = a.input("operation")
-    page = a.input("page")
 
     if not subject:
         a.error(400, "Subject is required")
@@ -1706,16 +1783,13 @@ def action_access_revoke(a):
         a.error(400, "Subject too long")
         return
 
-    if not operation:
-        a.error(400, "Operation is required")
-        return
-
     resource = "wiki/" + wiki["id"]
-    if page:
-        resource = resource + "/page/" + page
 
-    mochi.access.revoke(subject, resource, operation)
-    return {"data": {"ok": True}}
+    # Revoke all rules for this subject (including wildcard)
+    for op in ACCESS_LEVELS + ["*"]:
+        mochi.access.revoke(subject, resource, op)
+
+    return {"data": {"success": True}}
 
 # Search pages by title and content
 def action_search(a):
@@ -2380,7 +2454,7 @@ def event_attachment_create(e):
 
     # Open stream to subscriber to fetch the file data
     stream = mochi.stream(
-        {"from": wiki, "to": subscriber, "service": "wiki", "event": "attachment/fetch"},
+        {"from": wiki, "to": subscriber, "service": "wikis", "event": "attachment/fetch"},
         {"id": attachment_id}
     )
 
@@ -2483,7 +2557,7 @@ def import_sync_dump(wiki, dump):
         return False
 
     # Import pages
-    pages = dump.get("pages", [])
+    pages = dump.get("pages") or []
     for p in pages:
         existing = mochi.db.row("select version from pages where id=?", p["id"])
         if existing and existing["version"] >= p["version"]:
@@ -2492,18 +2566,18 @@ def import_sync_dump(wiki, dump):
             p["id"], wiki, p["page"], p["title"], p["content"], p["author"], p["created"], p["updated"], p["version"], p.get("deleted", 0))
 
     # Import revisions
-    revisions = dump.get("revisions", [])
+    revisions = dump.get("revisions") or []
     for r in revisions:
         mochi.db.execute("insert or ignore into revisions (id, page, content, title, author, name, created, version, comment) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             r["id"], r["page"], r["content"], r["title"], r["author"], r.get("name", ""), r["created"], r["version"], r.get("comment", ""))
 
     # Import tags
-    tags = dump.get("tags", [])
+    tags = dump.get("tags") or []
     for t in tags:
         mochi.db.execute("insert or ignore into tags (page, tag) values (?, ?)", t["page"], t["tag"])
 
     # Import redirects
-    redirects = dump.get("redirects", [])
+    redirects = dump.get("redirects") or []
     for r in redirects:
         mochi.db.execute("replace into redirects (wiki, source, target, created) values (?, ?, ?, ?)", wiki, r["source"], r["target"], r["created"])
 
@@ -2515,7 +2589,7 @@ def import_sync_dump(wiki, dump):
             name or "", home or "home", wiki)
 
     # Import attachments (store with local wiki as object, remote as entity for fetching)
-    attachments = dump.get("attachments", [])
+    attachments = dump.get("attachments") or []
     source = dump.get("source", "")  # Remote wiki entity ID for on-demand fetching
     for att in attachments:
         mochi.db.execute("""replace into _attachments
@@ -2546,7 +2620,7 @@ def action_subscribe(a):
 
     # Send subscribe request to target
     mochi.message.send(
-        {"from": wiki["id"], "to": target, "service": "wiki", "event": "subscribe"},
+        {"from": wiki["id"], "to": target, "service": "wikis", "event": "subscribe"},
         {"name": a.user.identity.name or ""}
     )
 
@@ -2574,7 +2648,7 @@ def action_sync(a):
 
     # Open stream to target and request sync
     stream = mochi.stream(
-        {"from": from_entity, "to": target, "service": "wiki", "event": "sync"},
+        {"from": from_entity, "to": target, "service": "wikis", "event": "sync"},
         {}
     )
 
@@ -2591,7 +2665,7 @@ def action_sync(a):
 
     # Subscribe to the source wiki for future updates
     mochi.message.send(
-        {"from": wiki["id"], "to": target, "service": "wiki", "event": "subscribe"},
+        {"from": wiki["id"], "to": target, "service": "wikis", "event": "subscribe"},
         {"name": wiki.get("name") or ""}
     )
 
@@ -2641,7 +2715,7 @@ def action_attachment_upload(a):
         # Source will fetch the file data from us via stream
         for att in attachments:
             mochi.message.send(
-                {"from": wiki["id"], "to": source, "service": "wiki", "event": "attachment/create"},
+                {"from": wiki["id"], "to": source, "service": "wikis", "event": "attachment/create"},
                 {
                     "id": att["id"],
                     "name": att["name"],
@@ -2726,7 +2800,7 @@ def action_attachment_delete(a):
             }
             if source:
                 mochi.message.send(
-                    {"from": wiki["id"], "to": source, "service": "wiki", "event": "page/update"},
+                    {"from": wiki["id"], "to": source, "service": "wikis", "event": "page/update"},
                     event_data
                 )
             else:
@@ -2735,7 +2809,7 @@ def action_attachment_delete(a):
     # Notify source of attachment deletion (if subscriber)
     if source:
         mochi.message.send(
-            {"from": wiki["id"], "to": source, "service": "wiki", "event": "attachment/delete"},
+            {"from": wiki["id"], "to": source, "service": "wikis", "event": "attachment/delete"},
             {"id": id}
         )
 

@@ -1,19 +1,14 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { requestHelpers } from '@mochi/common'
+import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { requestHelpers, getAppPath } from '@mochi/common'
 import endpoints from '@/api/endpoints'
-import { Card, CardHeader, CardTitle } from '@mochi/common'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@mochi/common'
-import { Input } from '@mochi/common'
-import { Label } from '@mochi/common'
-import { Button } from '@mochi/common'
-import { useState } from 'react'
+import { Card, CardHeader, CardTitle, Button } from '@mochi/common'
 import { toast } from 'sonner'
-import { Plus, BookOpen, Link2, Bookmark, X } from 'lucide-react'
+import { BookOpen, Link2, Bookmark, X } from 'lucide-react'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { usePage, useAddBookmark, useRemoveBookmark } from '@/hooks/use-wiki'
+import { usePage, useRemoveBookmark } from '@/hooks/use-wiki'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
-import { getAppPath } from '@mochi/common'
 import {
   PageView,
   PageNotFound,
@@ -21,6 +16,8 @@ import {
 } from '@/features/wiki/page-view'
 import { PageHeader } from '@/features/wiki/page-header'
 import { GeneralError } from '@mochi/common'
+import { useSidebarContext } from '@/context/sidebar-context'
+import { cacheWikisList, setLastLocation } from '@/hooks/use-wiki-storage'
 
 interface InfoResponse {
   entity: boolean
@@ -40,6 +37,15 @@ interface WikiItem {
 export const Route = createFileRoute('/_authenticated/')({
   loader: async () => {
     const info = await requestHelpers.get<InfoResponse>(endpoints.wiki.info)
+
+    // Cache wikis list for sidebar
+    if (info.wikis || info.bookmarks) {
+      cacheWikisList(
+        info.wikis?.map(w => ({ id: w.id, name: w.name, source: w.source })) || [],
+        info.bookmarks?.map(b => ({ id: b.id, name: b.name })) || []
+      )
+    }
+
     return info
   },
   component: IndexPage,
@@ -51,17 +57,29 @@ function IndexPage() {
 
   // If we're in entity context, show the wiki's home page directly
   if (data.entity && data.wiki) {
-    return <WikiHomePage homeSlug={data.wiki.home} />
+    return <WikiHomePage wikiId={data.wiki.id} homeSlug={data.wiki.home} />
   }
 
-  // Class context - show the wikis list
+  // Class context with no wikis - show empty state
   return <WikisListPage wikis={data.wikis} bookmarks={data.bookmarks} />
 }
 
-function WikiHomePage({ homeSlug }: { homeSlug: string }) {
+function WikiHomePage({ wikiId, homeSlug }: { wikiId: string; homeSlug: string }) {
   const { data, isLoading, error } = usePage(homeSlug)
   const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : 'Home'
   usePageTitle(pageTitle)
+
+  // Register page with sidebar context for tree expansion
+  const { setPage } = useSidebarContext()
+  useEffect(() => {
+    setPage(homeSlug, pageTitle)
+    return () => setPage(null)
+  }, [homeSlug, pageTitle, setPage])
+
+  // Store last visited location
+  useEffect(() => {
+    setLastLocation(wikiId, homeSlug)
+  }, [wikiId, homeSlug])
 
   if (isLoading) {
     return (
@@ -125,28 +143,7 @@ interface WikisListPageProps {
 
 function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
   usePageTitle('Wikis')
-  const [bookmarkTarget, setBookmarkTarget] = useState('')
-  const [bookmarkDialogOpen, setBookmarkDialogOpen] = useState(false)
-  const addBookmark = useAddBookmark()
   const removeBookmark = useRemoveBookmark()
-
-  const handleAddBookmark = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!bookmarkTarget.trim()) {
-      toast.error('Wiki ID is required')
-      return
-    }
-    addBookmark.mutate(bookmarkTarget.trim(), {
-      onSuccess: () => {
-        toast.success('Wiki bookmarked')
-        setBookmarkTarget('')
-        setBookmarkDialogOpen(false)
-      },
-      onError: (error: Error) => {
-        toast.error(error.message || 'Failed to bookmark wiki')
-      },
-    })
-  }
 
   const handleRemoveBookmark = (id: string) => {
     removeBookmark.mutate(id, {
@@ -188,91 +185,15 @@ function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
 
   return (
     <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Wikis</h1>
-        <div className="flex gap-2">
-          <Dialog open={bookmarkDialogOpen} onOpenChange={setBookmarkDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="hover:bg-highlight">
-                <Bookmark className="mr-2 h-4 w-4" />
-                Bookmark wiki
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Bookmark wiki</DialogTitle>
-                <DialogDescription>
-                  Follow a wiki without making a local copy. You'll be able to view it directly from the source.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleAddBookmark} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="bookmark-target">Wiki entity ID</Label>
-                  <Input
-                    id="bookmark-target"
-                    placeholder="abc123..."
-                    value={bookmarkTarget}
-                    onChange={(e) => setBookmarkTarget(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setBookmarkDialogOpen(false)}
-                    disabled={addBookmark.isPending}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={addBookmark.isPending}>
-                    <Bookmark className="mr-2 h-4 w-4" />
-                    {addBookmark.isPending ? 'Bookmarking...' : 'Bookmark'}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-          <Link to="/join">
-            <Button variant="outline" className="hover:bg-highlight">
-              <Link2 className="mr-2 h-4 w-4" />
-              Join wiki
-            </Button>
-          </Link>
-          <Link to="/new">
-            <Button variant="outline" className="hover:bg-highlight">
-              <Plus className="mr-2 h-4 w-4" />
-              Create wiki
-            </Button>
-          </Link>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold mb-6">Wikis</h1>
 
       {!hasWikis ? (
         <Card className="p-8 text-center">
           <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
           <h2 className="text-xl font-semibold mb-2">No wikis yet</h2>
-          <p className="text-muted-foreground mb-4">
-            Create a new wiki, join an existing one, or bookmark a wiki to follow.
+          <p className="text-muted-foreground">
+            Use the sidebar to create a new wiki, join an existing one, or bookmark a wiki to follow.
           </p>
-          <div className="flex gap-2 justify-center">
-            <Button variant="outline" className="hover:bg-highlight" onClick={() => setBookmarkDialogOpen(true)}>
-              <Bookmark className="mr-2 h-4 w-4" />
-              Bookmark wiki
-            </Button>
-            <Link to="/join">
-              <Button variant="outline" className="hover:bg-highlight">
-                <Link2 className="mr-2 h-4 w-4" />
-                Join wiki
-              </Button>
-            </Link>
-            <Link to="/new">
-              <Button variant="outline" className="hover:bg-highlight">
-                <Plus className="mr-2 h-4 w-4" />
-                Create wiki
-              </Button>
-            </Link>
-          </div>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { usePage } from '@/hooks/use-wiki'
 import { usePageTitle } from '@/hooks/usePageTitle'
 import {
@@ -9,6 +10,9 @@ import {
 import { PageHeader } from '@/features/wiki/page-header'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
+import { useSidebarContext } from '@/context/sidebar-context'
+import { useWikiContext } from '@/context/wiki-context'
+import { setLastLocation } from '@/hooks/use-wiki-storage'
 
 export const Route = createFileRoute('/_authenticated/$page/')({
   component: WikiPageRoute,
@@ -18,8 +22,23 @@ function WikiPageRoute() {
   const params = Route.useParams()
   const slug = params.page
   const { data, isLoading, error } = usePage(slug)
+  const { info } = useWikiContext()
   const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : slug
   usePageTitle(pageTitle)
+
+  // Register page with sidebar context for tree expansion
+  const { setPage } = useSidebarContext()
+  useEffect(() => {
+    setPage(slug, pageTitle)
+    return () => setPage(null)
+  }, [slug, pageTitle, setPage])
+
+  // Store last visited location
+  useEffect(() => {
+    if (info?.wiki?.id) {
+      setLastLocation(info.wiki.id, slug)
+    }
+  }, [info?.wiki?.id, slug])
 
   if (isLoading) {
     return (

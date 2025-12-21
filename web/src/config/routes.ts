@@ -4,6 +4,7 @@ export const APP_ROUTES = {
     HOME: '/',
     SEARCH: '/search',
     NEW: '/new',
+    JOIN: '/join',
     TAGS: '/tags',
     CHANGES: '/changes',
     SETTINGS: '/settings',

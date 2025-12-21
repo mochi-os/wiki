@@ -35,6 +35,7 @@ import { Route as AuthenticatedErrorsErrorRouteImport } from './routes/_authenti
 import { Route as AuthenticatedPageRevertRouteImport } from './routes/_authenticated/$page/revert'
 import { Route as AuthenticatedPageEditRouteImport } from './routes/_authenticated/$page/edit'
 import { Route as AuthenticatedPageDeleteRouteImport } from './routes/_authenticated/$page/delete'
+import { Route as AuthenticatedPageAttachmentsRouteImport } from './routes/_authenticated/$page/attachments'
 import { Route as AuthenticatedPageHistoryIndexRouteImport } from './routes/_authenticated/$page/history/index'
 import { Route as AuthenticatedPageHistoryVersionRouteImport } from './routes/_authenticated/$page/history/$version'
 
@@ -174,6 +175,12 @@ const AuthenticatedPageDeleteRoute = AuthenticatedPageDeleteRouteImport.update({
   path: '/$page/delete',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPageAttachmentsRoute =
+  AuthenticatedPageAttachmentsRouteImport.update({
+    id: '/$page/attachments',
+    path: '/$page/attachments',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedPageHistoryIndexRoute =
   AuthenticatedPageHistoryIndexRouteImport.update({
     id: '/$page/history/',
@@ -201,6 +208,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/tags': typeof AuthenticatedTagsRoute
   '/': typeof AuthenticatedIndexRoute
+  '/$page/attachments': typeof AuthenticatedPageAttachmentsRoute
   '/$page/delete': typeof AuthenticatedPageDeleteRoute
   '/$page/edit': typeof AuthenticatedPageEditRoute
   '/$page/revert': typeof AuthenticatedPageRevertRoute
@@ -230,6 +238,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/tags': typeof AuthenticatedTagsRoute
   '/': typeof AuthenticatedIndexRoute
+  '/$page/attachments': typeof AuthenticatedPageAttachmentsRoute
   '/$page/delete': typeof AuthenticatedPageDeleteRoute
   '/$page/edit': typeof AuthenticatedPageEditRoute
   '/$page/revert': typeof AuthenticatedPageRevertRoute
@@ -261,6 +270,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tags': typeof AuthenticatedTagsRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/$page/attachments': typeof AuthenticatedPageAttachmentsRoute
   '/_authenticated/$page/delete': typeof AuthenticatedPageDeleteRoute
   '/_authenticated/$page/edit': typeof AuthenticatedPageEditRoute
   '/_authenticated/$page/revert': typeof AuthenticatedPageRevertRoute
@@ -292,6 +302,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tags'
     | '/'
+    | '/$page/attachments'
     | '/$page/delete'
     | '/$page/edit'
     | '/$page/revert'
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tags'
     | '/'
+    | '/$page/attachments'
     | '/$page/delete'
     | '/$page/edit'
     | '/$page/revert'
@@ -351,6 +363,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/tags'
     | '/_authenticated/'
+    | '/_authenticated/$page/attachments'
     | '/_authenticated/$page/delete'
     | '/_authenticated/$page/edit'
     | '/_authenticated/$page/revert'
@@ -560,6 +573,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPageDeleteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/$page/attachments': {
+      id: '/_authenticated/$page/attachments'
+      path: '/$page/attachments'
+      fullPath: '/$page/attachments'
+      preLoaderRoute: typeof AuthenticatedPageAttachmentsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/$page/history/': {
       id: '/_authenticated/$page/history/'
       path: '/$page/history'
@@ -586,6 +606,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTagsRoute: typeof AuthenticatedTagsRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedPageAttachmentsRoute: typeof AuthenticatedPageAttachmentsRoute
   AuthenticatedPageDeleteRoute: typeof AuthenticatedPageDeleteRoute
   AuthenticatedPageEditRoute: typeof AuthenticatedPageEditRoute
   AuthenticatedPageRevertRoute: typeof AuthenticatedPageRevertRoute
@@ -611,6 +632,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTagsRoute: AuthenticatedTagsRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedPageAttachmentsRoute: AuthenticatedPageAttachmentsRoute,
   AuthenticatedPageDeleteRoute: AuthenticatedPageDeleteRoute,
   AuthenticatedPageEditRoute: AuthenticatedPageEditRoute,
   AuthenticatedPageRevertRoute: AuthenticatedPageRevertRoute,

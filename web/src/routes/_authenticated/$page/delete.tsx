@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { usePage } from '@/hooks/use-wiki'
 import { usePageTitle } from '@/hooks/usePageTitle'
@@ -5,6 +6,7 @@ import { DeletePage } from '@/features/wiki/delete-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
 import { Skeleton } from '@mochi/common'
+import { useSidebarContext } from '@/context/sidebar-context'
 
 export const Route = createFileRoute('/_authenticated/$page/delete')({
   component: DeletePageRoute,
@@ -16,6 +18,13 @@ function DeletePageRoute() {
   const { data, isLoading, error } = usePage(slug)
   const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : slug
   usePageTitle(`Delete: ${pageTitle}`)
+
+  // Register page with sidebar context for tree expansion
+  const { setPage } = useSidebarContext()
+  useEffect(() => {
+    setPage(slug, pageTitle)
+    return () => setPage(null)
+  }, [slug, pageTitle, setPage])
 
   if (isLoading) {
     return (

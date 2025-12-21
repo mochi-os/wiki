@@ -1,19 +1,19 @@
-// Mochi Wiki app
+// Mochi Wikis app
 // Copyright Alistair Cunningham 2025
 
 {
 	"version": "1.0",
 	"label": "app_name",
 	"classes": ["wiki"],
-	"paths": ["wiki"],
-	"services": ["wiki"],
+	"paths": ["wikis"],
+	"services": ["wikis"],
 
 	"architecture": {"engine": "starlark", "version": 2},
-	"execute": ["wiki.star"],
+	"execute": ["wikis.star"],
 
 	"database": {
-		"schema": 5,
-		"file": "wiki.db",
+		"schema": 6,
+		"file": "wikis.db",
 		"create": {"function": "database_create"},
 		"upgrade": {"function": "database_upgrade"}
 	},
@@ -44,8 +44,7 @@
 		":wiki/-/subscribers": {"function": "action_subscribers"},
 		":wiki/-/subscriber/remove": {"function": "action_subscriber_remove"},
 		":wiki/-/access": {"function": "action_access_list"},
-		":wiki/-/access/grant": {"function": "action_access_grant"},
-		":wiki/-/access/deny": {"function": "action_access_deny"},
+		":wiki/-/access/set": {"function": "action_access_set"},
 		":wiki/-/access/revoke": {"function": "action_access_revoke"},
 		":wiki/-/delete": {"function": "action_delete"},
 		":wiki/-/tags": {"function": "action_tags", "public": true},

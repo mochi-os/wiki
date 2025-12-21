@@ -23,9 +23,6 @@ import type {
   AttachmentUploadResponse,
   AttachmentDeleteResponse,
   AccessListResponse,
-  AccessGrantResponse,
-  AccessDenyResponse,
-  AccessRevokeResponse,
   WikiPermissions,
 } from '@/types/wiki'
 import endpoints from '@/api/endpoints'
@@ -36,7 +33,8 @@ import { requestHelpers } from '@mochi/common'
 export interface WikiInfoResponse {
   entity: boolean
   wiki?: { id: string; name: string; home: string }
-  wikis?: Array<{ id: string; name: string; home: string }>
+  wikis?: Array<{ id: string; name: string; home: string; source?: string }>
+  bookmarks?: Array<{ id: string; name: string; added: number }>
   permissions?: WikiPermissions
   fingerprint?: string
 }
@@ -394,22 +392,11 @@ export function useAccessRules() {
   })
 }
 
-export function useGrantAccess() {
+export function useSetAccess() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
-      requestHelpers.post<AccessGrantResponse>(endpoints.wiki.accessGrant, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
-    },
-  })
-}
-
-export function useDenyAccess() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
-      requestHelpers.post<AccessDenyResponse>(endpoints.wiki.accessDeny, data),
+    mutationFn: (data: { subject: string; level: string }) =>
+      requestHelpers.post<{ success: boolean }>(endpoints.wiki.accessSet, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
     },
@@ -419,11 +406,55 @@ export function useDenyAccess() {
 export function useRevokeAccess() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (data: { subject: string; operation: string; page?: string }) =>
-      requestHelpers.post<AccessRevokeResponse>(endpoints.wiki.accessRevoke, data),
+    mutationFn: (subject: string) =>
+      requestHelpers.post<{ success: boolean }>(endpoints.wiki.accessRevoke, { subject }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wiki', 'access'] })
     },
+  })
+}
+
+// User/Group search (via People app)
+
+export interface UserSearchResult {
+  id: string
+  name: string
+}
+
+export interface UserSearchResponse {
+  results: UserSearchResult[]
+}
+
+export function useUserSearch(query: string) {
+  return useQuery({
+    queryKey: ['users', 'search', query],
+    queryFn: async () => {
+      const formData = new URLSearchParams()
+      formData.append('search', query)
+      return requestHelpers.post<UserSearchResponse>(
+        endpoints.users.search,
+        formData.toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+      )
+    },
+    enabled: query.length >= 1,
+  })
+}
+
+export interface Group {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface GroupListResponse {
+  groups: Group[]
+}
+
+export function useGroups() {
+  return useQuery({
+    queryKey: ['groups', 'list'],
+    queryFn: () => requestHelpers.get<GroupListResponse>(endpoints.groups.list),
   })
 }
 

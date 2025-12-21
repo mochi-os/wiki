@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Save, X, Eye, Edit2, Image } from 'lucide-react'
+import { Save, X, Eye, Edit2, Image, Trash2 } from 'lucide-react'
 import { Button } from '@mochi/common'
 import { Input } from '@mochi/common'
 import { Textarea } from '@mochi/common'
@@ -9,9 +9,9 @@ import { Label } from '@mochi/common'
 import { Separator } from '@mochi/common'
 import { Skeleton } from '@mochi/common'
 import { useEditPage, useCreatePage } from '@/hooks/use-wiki'
+import { usePermissions } from '@/context/wiki-context'
 import type { WikiPage } from '@/types/wiki'
 import { MarkdownContent } from './markdown-content'
-import { AttachmentPicker } from './attachment-picker'
 
 interface PageEditorProps {
   page?: WikiPage
@@ -23,33 +23,13 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
   const navigate = useNavigate()
   const editPage = useEditPage()
   const createPage = useCreatePage()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const permissions = usePermissions()
 
   const [title, setTitle] = useState(page?.title ?? '')
   const [content, setContent] = useState(page?.content ?? '')
   const [comment, setComment] = useState('')
   const [newSlug, setNewSlug] = useState(slug)
   const [showPreview, setShowPreview] = useState(false)
-
-  const insertAtCursor = (text: string) => {
-    const textarea = textareaRef.current
-    // If textarea doesn't exist or doesn't have focus, append at end
-    if (!textarea || document.activeElement !== textarea) {
-      setContent((prev) => prev + (prev.endsWith('\n') || prev === '' ? '' : '\n') + text)
-      return
-    }
-
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const newContent = content.slice(0, start) + text + content.slice(end)
-    setContent(newContent)
-
-    // Set cursor position after inserted text
-    requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.setSelectionRange(start + text.length, start + text.length)
-    })
-  }
 
   const isPending = editPage.isPending || createPage.isPending
 
@@ -126,24 +106,24 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
               </>
             )}
           </Button>
-          <AttachmentPicker
-            onSelect={(_, markdown) => insertAtCursor(markdown)}
-            onDelete={(id) => {
-              // Remove references to deleted attachment from content
-              const pattern = new RegExp(`!?\\[[^\\]]*\\]\\(attachments/${id}[^)]*\\)`, 'g')
-              setContent((prev) => prev.replace(pattern, '').replace(/\n\n\n+/g, '\n\n').trim())
-            }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <Image className="mr-2 h-4 w-4" />
-                Attachments
-              </Button>
-            }
-          />
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/$page/attachments" params={{ page: slug }}>
+              <Image className="mr-2 h-4 w-4" />
+              Attachments
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={handleCancel}>
             <X className="mr-2 h-4 w-4" />
             Cancel
           </Button>
+          {!isNew && permissions.delete && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/$page/delete" params={{ page: slug }}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete page
+              </Link>
+            </Button>
+          )}
           <Button size="sm" onClick={handleSave} disabled={isPending}>
             <Save className="mr-2 h-4 w-4" />
             {isPending ? 'Saving...' : 'Save'}
@@ -194,7 +174,6 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
           <div className="space-y-2">
             <Label htmlFor="content">Content</Label>
             <Textarea
-              ref={textareaRef}
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}

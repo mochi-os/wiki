@@ -1,4 +1,10 @@
 const endpoints = {
+  users: {
+    search: '/people/_/users/search',
+  },
+  groups: {
+    list: '/people/_/groups',
+  },
   auth: {
     code: '/_/code',
     verify: '/_/verify',
@@ -38,9 +44,11 @@ const endpoints = {
     subscriberRemove: 'subscriber/remove',
     // Access control
     access: 'access',
-    accessGrant: 'access/grant',
-    accessDeny: 'access/deny',
+    accessSet: 'access/set',
     accessRevoke: 'access/revoke',
+    // User/group search
+    userSearch: 'user/search',
+    groups: 'groups',
     // Delete wiki
     delete: 'delete',
     // Sync

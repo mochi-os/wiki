@@ -1,26 +1,21 @@
 import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { z } from 'zod'
 import { usePageTitle } from '@/hooks/usePageTitle'
-import { RevertPage } from '@/features/wiki/revert-page'
+import { AttachmentsPage, AttachmentsPageSkeleton } from '@/features/wiki/attachments-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
 import { useSidebarContext } from '@/context/sidebar-context'
+import { useAttachments } from '@/hooks/use-wiki'
 
-const searchSchema = z.object({
-  version: z.coerce.number(),
+export const Route = createFileRoute('/_authenticated/$page/attachments')({
+  component: AttachmentsRoute,
 })
 
-export const Route = createFileRoute('/_authenticated/$page/revert')({
-  validateSearch: searchSchema,
-  component: RevertPageRoute,
-})
-
-function RevertPageRoute() {
+function AttachmentsRoute() {
   const params = Route.useParams()
-  const { version } = Route.useSearch()
   const slug = params.page
-  usePageTitle(`Revert: ${slug}`)
+  usePageTitle('Attachments')
+  const { isLoading } = useAttachments()
 
   // Register page with sidebar context for tree expansion
   const { setPage } = useSidebarContext()
@@ -29,12 +24,12 @@ function RevertPageRoute() {
     return () => setPage(null)
   }, [slug, setPage])
 
-  if (!version || version < 1) {
+  if (isLoading) {
     return (
       <>
         <Header />
         <Main>
-          <div className="text-destructive">Invalid version number</div>
+          <AttachmentsPageSkeleton viewMode="grid" />
         </Main>
       </>
     )
@@ -44,7 +39,7 @@ function RevertPageRoute() {
     <>
       <Header />
       <Main>
-        <RevertPage slug={slug} version={version} />
+        <AttachmentsPage slug={slug} />
       </Main>
     </>
   )

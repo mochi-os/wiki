@@ -203,27 +203,19 @@ export interface AttachmentDeleteResponse {
 
 // Access Control
 export interface AccessRule {
-  id: number
+  id?: number
   subject: string
-  resource: string
   operation: string
   grant: number
-  granter: string
-  created: number
+  name?: string  // Resolved name for display
+}
+
+export interface AccessOwner {
+  id: string
+  name?: string
 }
 
 export interface AccessListResponse {
   rules: AccessRule[]
-}
-
-export interface AccessGrantResponse {
-  ok: boolean
-}
-
-export interface AccessDenyResponse {
-  ok: boolean
-}
-
-export interface AccessRevokeResponse {
-  ok: boolean
+  owner?: AccessOwner | null
 }
