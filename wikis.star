@@ -1368,7 +1368,7 @@ def action_tags(a):
         a.error(403, "Access denied")
         return
 
-    tags = mochi.db.execute("""
+    tags = mochi.db.rows("""
         select t.tag, count(*) as count
         from tags t
         join pages p on p.id=t.page
@@ -1397,7 +1397,7 @@ def action_tag_pages(a):
 
     tag = tag.lower().strip()
 
-    pages = mochi.db.execute("""
+    pages = mochi.db.rows("""
         select p.page, p.title, p.updated
         from pages p
         join tags t on t.page=p.id
@@ -1419,7 +1419,7 @@ def action_changes(a):
         return
 
     # Get recent revisions with page info
-    changes = mochi.db.execute("""
+    changes = mochi.db.rows("""
         select r.id, r.title, r.author, r.name, r.created, r.version, r.comment,
                p.page as slug
         from revisions r
@@ -1812,7 +1812,7 @@ def action_search(a):
     # Use LIKE for simple search (SQLite FTS could be added later for better performance)
     pattern = "%" + query + "%"
 
-    results = mochi.db.execute("""
+    results = mochi.db.rows("""
         select page, title, substr(content, 1, 200) as excerpt, updated
         from pages
         where wiki=? and deleted=0 and (title like ? or content like ?)
@@ -2187,12 +2187,12 @@ def event_sync(e):
     pages = mochi.db.rows("select * from pages where wiki=?", wiki)
 
     # Get all revisions and tags for pages in this wiki using joins
-    revisions = mochi.db.execute("""
+    revisions = mochi.db.rows("""
         select r.* from revisions r
         join pages p on p.id = r.page
         where p.wiki = ?
     """, wiki)
-    tags = mochi.db.execute("""
+    tags = mochi.db.rows("""
         select t.* from tags t
         join pages p on p.id = t.page
         where p.wiki = ?
@@ -2397,16 +2397,12 @@ def event_attachment_upload_request(e):
         e.write({"status": "400", "error": "File name is required"})
         return
 
-    # Save file data directly to temp location (avoids loading into memory)
-    temp_path = "temp/upload_" + mochi.uid()
-    e.stream.read_to_file(temp_path)
-
     # Get subscribers for notification
     subscribers = mochi.db.rows("select id from subscribers where wiki=? and id!=?", wiki, wiki)
     notify = [s["id"] for s in subscribers]
 
-    # Create the attachment from the temp file
-    attachment = mochi.attachment.create_from_file(wiki, name, temp_path, content_type, "", "", notify)
+    # Stream directly to attachment storage (no temp file needed)
+    attachment = mochi.attachment.create_from_stream(wiki, name, e.stream, content_type, "", "", notify)
 
     if not attachment:
         e.write({"status": "500", "error": "Failed to create attachment"})
@@ -2470,18 +2466,12 @@ def event_attachment_create(e):
             attachment_id, subscriber, response.get("error") if response else "no response")
         return
 
-    # Read file data to temp location
-    temp_path = "temp/fetch_" + mochi.uid()
-    mochi.log.debug("Reading file to temp path: %s", temp_path)
-    bytes_read = stream.read_to_file(temp_path)
-    mochi.log.debug("Read %s bytes to %s", bytes_read, temp_path)
-
     # Get subscribers for notification (excluding the one who uploaded)
     subscribers = mochi.db.rows("select id from subscribers where wiki=? and id!=?", wiki, subscriber)
     notify = [s["id"] for s in subscribers]
 
-    # Create the attachment from the temp file with the original ID
-    attachment = mochi.attachment.create_from_file(wiki, name, temp_path, content_type, "", "", notify, attachment_id)
+    # Stream directly to attachment storage with the original ID (no temp file needed)
+    attachment = mochi.attachment.create_from_stream(wiki, name, stream, content_type, "", "", notify, attachment_id)
 
     if attachment:
         mochi.log.debug("Created attachment %s from subscriber %s", attachment_id, subscriber)

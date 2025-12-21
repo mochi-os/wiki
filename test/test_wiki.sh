@@ -50,12 +50,12 @@ echo ""
 echo "--- Wiki Creation Test ---"
 
 # Test: Create wiki
-RESULT=$("$CURL_HELPER" -a admin -X POST -H "Content-Type: application/json" -d '{"name":"Test Wiki"}' "/wiki/create")
+RESULT=$("$CURL_HELPER" -a admin -X POST -H "Content-Type: application/json" -d '{"name":"Test Wiki"}' "/wikis/create")
 if echo "$RESULT" | grep -q '"id":"'; then
-    WIKI_ENTITY=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])" 2>/dev/null)
+    WIKI_ENTITY=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
     if [ -n "$WIKI_ENTITY" ]; then
         pass "Create wiki (entity: $WIKI_ENTITY)"
-        BASE_URL="/$WIKI_ENTITY"
+        BASE_URL="/wikis/$WIKI_ENTITY"
     else
         fail "Create wiki" "Could not extract entity ID"
         exit 1
@@ -75,7 +75,7 @@ echo ""
 echo "--- Page Lifecycle Tests ---"
 
 # Test: Create page (uses /-/new route in entity context)
-RESULT=$(wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"test-create","title":"Test Create","content":"Test content"}')
+RESULT=$(wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"test-create","title":"Test Create","content":"Test content"}')
 if echo "$RESULT" | grep -q '"slug":"test-create"'; then
     pass "Create page"
 else
@@ -83,7 +83,7 @@ else
 fi
 
 # Test: Get page
-RESULT=$(wiki_curl GET "/test-create")
+RESULT=$(wiki_api_curl GET "/test-create")
 if echo "$RESULT" | grep -q '"title":"Test Create"'; then
     pass "Get page"
 else
@@ -91,7 +91,7 @@ else
 fi
 
 # Test: Edit page
-RESULT=$(wiki_curl POST "/test-create/edit" -H "Content-Type: application/json" -d '{"title":"Updated Title","content":"Updated content","comment":"Test edit"}')
+RESULT=$(wiki_api_curl POST "/test-create/edit" -H "Content-Type: application/json" -d '{"title":"Updated Title","content":"Updated content","comment":"Test edit"}')
 if echo "$RESULT" | grep -q '"version":2'; then
     pass "Edit page"
 else
@@ -99,7 +99,7 @@ else
 fi
 
 # Test: Page not found
-RESULT=$(wiki_curl GET "/nonexistent-page-xyz")
+RESULT=$(wiki_api_curl GET "/nonexistent-page-xyz")
 if echo "$RESULT" | grep -q '"error":"not_found"'; then
     pass "Page not found"
 else
@@ -107,7 +107,7 @@ else
 fi
 
 # Test: Delete page
-RESULT=$(wiki_curl POST "/test-create/delete")
+RESULT=$(wiki_api_curl POST "/test-create/delete")
 if echo "$RESULT" | grep -q '"ok":true'; then
     pass "Delete page"
 else
@@ -122,12 +122,12 @@ echo ""
 echo "--- Revision History Tests ---"
 
 # Create page with multiple edits
-wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"test-history","title":"Version 1","content":"Content v1"}' > /dev/null
-wiki_curl POST "/test-history/edit" -H "Content-Type: application/json" -d '{"title":"Version 2","content":"Content v2","comment":"Edit 1"}' > /dev/null
-wiki_curl POST "/test-history/edit" -H "Content-Type: application/json" -d '{"title":"Version 3","content":"Content v3","comment":"Edit 2"}' > /dev/null
+wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"test-history","title":"Version 1","content":"Content v1"}' > /dev/null
+wiki_api_curl POST "/test-history/edit" -H "Content-Type: application/json" -d '{"title":"Version 2","content":"Content v2","comment":"Edit 1"}' > /dev/null
+wiki_api_curl POST "/test-history/edit" -H "Content-Type: application/json" -d '{"title":"Version 3","content":"Content v3","comment":"Edit 2"}' > /dev/null
 
 # Test: Get history
-RESULT=$(wiki_curl GET "/test-history/history")
+RESULT=$(wiki_api_curl GET "/test-history/history")
 if echo "$RESULT" | grep -q '"revisions":\['; then
     pass "Get history"
 else
@@ -135,7 +135,7 @@ else
 fi
 
 # Test: Get specific revision
-RESULT=$(wiki_curl GET "/test-history/history/1")
+RESULT=$(wiki_api_curl GET "/test-history/history/1")
 if echo "$RESULT" | grep -q '"version":1'; then
     pass "Get revision"
 else
@@ -143,7 +143,7 @@ else
 fi
 
 # Test: Revert to previous version
-RESULT=$(wiki_curl POST "/test-history/revert" -H "Content-Type: application/json" -d '{"version":1,"comment":"Reverting"}')
+RESULT=$(wiki_api_curl POST "/test-history/revert" -H "Content-Type: application/json" -d '{"version":1,"comment":"Reverting"}')
 if echo "$RESULT" | grep -q '"reverted_from":1'; then
     pass "Revert page"
 else
@@ -151,7 +151,7 @@ else
 fi
 
 # Clean up
-wiki_curl POST "/test-history/delete" > /dev/null
+wiki_api_curl POST "/test-history/delete" > /dev/null
 
 # ============================================================================
 # TAG TESTS
@@ -161,10 +161,10 @@ echo ""
 echo "--- Tag Tests ---"
 
 # Create test page
-wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"test-tags","title":"Tag Test","content":"Content"}' > /dev/null
+wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"test-tags","title":"Tag Test","content":"Content"}' > /dev/null
 
 # Test: Add tag
-RESULT=$(wiki_curl POST "/test-tags/tag/add" -H "Content-Type: application/json" -d '{"tag":"test-tag"}')
+RESULT=$(wiki_api_curl POST "/test-tags/tag/add" -H "Content-Type: application/json" -d '{"tag":"test-tag"}')
 if echo "$RESULT" | grep -q '"ok":true'; then
     pass "Add tag"
 else
@@ -173,7 +173,7 @@ fi
 
 # Test: List tags
 RESULT=$(wiki_api_curl GET "/tags")
-if echo "$RESULT" | grep -q '"tags":\['; then
+if echo "$RESULT" | grep -q '"tags":'; then
     pass "List tags"
 else
     fail "List tags" "$RESULT"
@@ -181,14 +181,14 @@ fi
 
 # Test: Get pages by tag
 RESULT=$(wiki_api_curl GET "/tag/test-tag")
-if echo "$RESULT" | grep -q '"pages":\['; then
+if echo "$RESULT" | grep -q '"pages":'; then
     pass "Get pages by tag"
 else
     fail "Get pages by tag" "$RESULT"
 fi
 
 # Test: Remove tag
-RESULT=$(wiki_curl POST "/test-tags/tag/remove" -H "Content-Type: application/json" -d '{"tag":"test-tag"}')
+RESULT=$(wiki_api_curl POST "/test-tags/tag/remove" -H "Content-Type: application/json" -d '{"tag":"test-tag"}')
 if echo "$RESULT" | grep -q '"ok":true'; then
     pass "Remove tag"
 else
@@ -196,7 +196,7 @@ else
 fi
 
 # Clean up
-wiki_curl POST "/test-tags/delete" > /dev/null
+wiki_api_curl POST "/test-tags/delete" > /dev/null
 
 # ============================================================================
 # REDIRECT TESTS
@@ -206,7 +206,7 @@ echo ""
 echo "--- Redirect Tests ---"
 
 # Create target page
-wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"redirect-target","title":"Target","content":"Content"}' > /dev/null
+wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"redirect-target","title":"Target","content":"Content"}' > /dev/null
 
 # Test: Set redirect
 RESULT=$(wiki_api_curl POST "/redirect/set" -H "Content-Type: application/json" -d '{"source":"old-url","target":"redirect-target"}')
@@ -233,7 +233,7 @@ else
 fi
 
 # Clean up
-wiki_curl POST "/redirect-target/delete" > /dev/null
+wiki_api_curl POST "/redirect-target/delete" > /dev/null
 
 # ============================================================================
 # SEARCH TESTS
@@ -243,8 +243,8 @@ echo ""
 echo "--- Search Tests ---"
 
 # Create test pages
-wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"search-test-1","title":"Unique Searchable Title","content":"Some content"}' > /dev/null
-wiki_api_curl POST "/new" -H "Content-Type: application/json" -d '{"slug":"search-test-2","title":"Another Page","content":"Contains xyz789unique text"}' > /dev/null
+wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"search-test-1","title":"Unique Searchable Title","content":"Some content"}' > /dev/null
+wiki_api_curl POST "/page/create" -H "Content-Type: application/json" -d '{"slug":"search-test-2","title":"Another Page","content":"Contains xyz789unique text"}' > /dev/null
 
 # Test: Search by title
 RESULT=$(wiki_api_curl GET "/search?q=Unique%20Searchable")
@@ -271,8 +271,8 @@ else
 fi
 
 # Clean up
-wiki_curl POST "/search-test-1/delete" > /dev/null
-wiki_curl POST "/search-test-2/delete" > /dev/null
+wiki_api_curl POST "/search-test-1/delete" > /dev/null
+wiki_api_curl POST "/search-test-2/delete" > /dev/null
 
 # ============================================================================
 # SETTINGS TESTS

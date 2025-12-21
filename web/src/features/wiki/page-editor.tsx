@@ -1,22 +1,46 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Save, X, Eye, Edit2, Image, Trash2 } from 'lucide-react'
-import { Button } from '@mochi/common'
+import { Save, X, Eye, Edit2, Image, Trash2, ImagePlus, File, FileText, Loader2 } from 'lucide-react'
+import { Button, getApiBasepath } from '@mochi/common'
 import { Input } from '@mochi/common'
 import { Textarea } from '@mochi/common'
 import { Label } from '@mochi/common'
 import { Separator } from '@mochi/common'
 import { Skeleton } from '@mochi/common'
-import { useEditPage, useCreatePage } from '@/hooks/use-wiki'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@mochi/common'
+import { useEditPage, useCreatePage, useAttachments, useUploadAttachment } from '@/hooks/use-wiki'
 import { usePermissions } from '@/context/wiki-context'
-import type { WikiPage } from '@/types/wiki'
+import type { WikiPage, Attachment } from '@/types/wiki'
 import { MarkdownContent } from './markdown-content'
 
 interface PageEditorProps {
   page?: WikiPage
   slug: string
   isNew?: boolean
+}
+
+// Helper to check if attachment is an image
+function isImage(type: string): boolean {
+  return type.startsWith('image/')
+}
+
+// Get icon for file type
+function getFileIcon(type: string) {
+  if (type.startsWith('image/')) return Image
+  if (type.startsWith('text/')) return FileText
+  return File
+}
+
+// Build attachment URL using API basepath
+function getAttachmentUrl(id: string): string {
+  return `${getApiBasepath()}attachments/${id}`
 }
 
 export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
@@ -30,8 +54,60 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
   const [comment, setComment] = useState('')
   const [newSlug, setNewSlug] = useState(slug)
   const [showPreview, setShowPreview] = useState(false)
+  const [insertDialogOpen, setInsertDialogOpen] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const cursorPositionRef = useRef<number>(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { data: attachmentsData } = useAttachments()
+  const uploadMutation = useUploadAttachment()
+  const attachments = attachmentsData?.attachments || []
 
   const isPending = editPage.isPending || createPage.isPending
+
+  // Save cursor position when opening dialog
+  const handleOpenInsertDialog = () => {
+    if (textareaRef.current) {
+      cursorPositionRef.current = textareaRef.current.selectionStart
+    }
+    setInsertDialogOpen(true)
+  }
+
+  // Insert markdown at saved cursor position
+  const insertMarkdown = (attachment: Attachment) => {
+    const url = `attachments/${attachment.id}`
+    const markdown = isImage(attachment.type)
+      ? `![${attachment.name}](${url})`
+      : `[${attachment.name}](${url})`
+
+    const pos = cursorPositionRef.current
+    const newContent = content.slice(0, pos) + markdown + content.slice(pos)
+    setContent(newContent)
+    setInsertDialogOpen(false)
+
+    // Focus textarea and set cursor after inserted text
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus()
+        const newPos = pos + markdown.length
+        textareaRef.current.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  }
+
+  // Handle file upload from dialog
+  const handleUpload = (files: FileList) => {
+    if (files.length > 0) {
+      uploadMutation.mutate(Array.from(files), {
+        onSuccess: () => {
+          toast.success(`${files.length} file(s) uploaded`)
+        },
+        onError: (error) => {
+          toast.error(error.message || 'Failed to upload files')
+        },
+      })
+    }
+  }
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -106,6 +182,14 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
               </>
             )}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenInsertDialog}
+          >
+            <ImagePlus className="mr-2 h-4 w-4" />
+            Insert
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/$page/attachments" params={{ page: slug }}>
               <Image className="mr-2 h-4 w-4" />
@@ -174,6 +258,7 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
           <div className="space-y-2">
             <Label htmlFor="content">Content</Label>
             <Textarea
+              ref={textareaRef}
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -196,6 +281,82 @@ export function PageEditor({ page, slug, isNew = false }: PageEditorProps) {
           )}
         </div>
       )}
+
+      {/* Insert attachment dialog */}
+      <Dialog open={insertDialogOpen} onOpenChange={setInsertDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Insert attachment</DialogTitle>
+            <DialogDescription>
+              Select an attachment to insert into your page, or upload a new file.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Upload button */}
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={(e) => {
+                if (e.target.files) handleUpload(e.target.files)
+                e.target.value = ''
+              }}
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx,.txt,.md"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadMutation.isPending}
+            >
+              {uploadMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <ImagePlus className="mr-2 h-4 w-4" />
+              )}
+              Upload new
+            </Button>
+          </div>
+
+          {/* Attachments grid */}
+          {attachments.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              No attachments yet. Upload a file to get started.
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-3 max-h-[400px] overflow-y-auto">
+              {attachments.map((attachment) => {
+                const FileIcon = getFileIcon(attachment.type)
+                return (
+                  <button
+                    key={attachment.id}
+                    type="button"
+                    onClick={() => insertMarkdown(attachment)}
+                    className="group rounded-lg border p-2 text-left hover:bg-muted/50 transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <div className="bg-muted flex aspect-square items-center justify-center overflow-hidden rounded mb-2">
+                      {isImage(attachment.type) ? (
+                        <img
+                          src={`${getAttachmentUrl(attachment.id)}/thumbnail`}
+                          alt={attachment.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <FileIcon className="h-8 w-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="text-xs truncate" title={attachment.name}>
+                      {attachment.name}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
