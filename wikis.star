@@ -1683,6 +1683,16 @@ def action_settings_set(a):
 
     # Only allow known settings
     if name == "home":
+        if not value:
+            a.error(400, "Home page is required")
+            return
+        if len(value) > 100:
+            a.error(400, "Home page slug too long (max 100 characters)")
+            return
+        for c in value.elems():
+            if not (c.isalnum() or c in "-_/"):
+                a.error(400, "Home page can only contain letters, numbers, hyphens, underscores, and slashes")
+                return
         mochi.db.execute("update wikis set home=? where id=?", value, wiki["id"])
     else:
         a.error(400, "Unknown setting: " + name)
