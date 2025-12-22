@@ -112,7 +112,7 @@ function NewWikiView() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Wiki Name</Label>
+                  <Label htmlFor="name">Wiki name</Label>
                   <Input
                     id="name"
                     placeholder="My Wiki"

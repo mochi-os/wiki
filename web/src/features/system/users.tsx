@@ -122,7 +122,7 @@ function CreateUserDialog({ onSuccess }: { onSuccess: () => void }) {
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create User</DialogTitle>
+            <DialogTitle>Create user</DialogTitle>
             <DialogDescription>Add a new user to the system.</DialogDescription>
           </DialogHeader>
           <div className='grid gap-4 py-4'>
@@ -653,7 +653,7 @@ export function SystemUsers() {
                   />
                   <SortableHeader
                     column='last_login'
-                    label='Last Login'
+                    label='Last login'
                     currentSort={sort}
                     currentOrder={order}
                     onSort={handleSort}

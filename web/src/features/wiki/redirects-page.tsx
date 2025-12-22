@@ -203,7 +203,7 @@ function AddRedirectDialog() {
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create Redirect</DialogTitle>
+            <DialogTitle>Create redirect</DialogTitle>
             <DialogDescription>
               Create a redirect from one URL to another. The source URL must not
               be an existing page.
