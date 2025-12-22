@@ -71,7 +71,9 @@
 		":wiki/-/:page/delete": {"function": "action_page_delete"},
 		":wiki/-/:page/tag/add": {"function": "action_tag_add"},
 		":wiki/-/:page/tag/remove": {"function": "action_tag_remove"},
-		":wiki/:page": {"file": "web/dist/index.html", "public": true}
+		":wiki/:page": {"file": "web/dist/index.html", "public": true},
+		"-/users/search": {"function": "action_users_search"},
+		"-/groups": {"function": "action_groups"}
 	},
 
 	"events": {
