@@ -50,13 +50,10 @@ def database_upgrade(version):
         # Add seen column to track subscriber activity
         mochi.db.execute("alter table subscribers add column seen integer not null default 0")
     elif version == 6:
-        # Clean up legacy access rules that are no longer needed
-        # Owner is now determined from entity.creator, not from access rules
+        # Clean up legacy #administrator rules
         wikis = mochi.db.rows("select id from wikis")
         for wiki in wikis:
             resource = "wiki/" + wiki["id"]
-            entity = mochi.entity.info(wiki["id"])
-            owner_id = entity.get("creator") if entity else None
             rules = mochi.access.list.resource(resource)
             for rule in rules:
                 subject = rule.get("subject", "")
@@ -64,9 +61,20 @@ def database_upgrade(version):
                 # Remove #administrator rules (legacy placeholder)
                 if subject == "#administrator" and operation:
                     mochi.access.revoke(subject, resource, operation)
-                # Remove owner rules (owner now has implicit full access)
-                if owner_id and subject == owner_id and operation:
-                    mochi.access.revoke(subject, resource, operation)
+    elif version == 7:
+        # Previously ran but mochi.entity.info() didn't include creator
+        # Re-run in version 8
+        pass
+    elif version == 8:
+        # Add explicit owner access rules for existing wikis
+        wikis = mochi.db.rows("select id from wikis")
+        for wiki in wikis:
+            wiki_id = wiki["id"]
+            resource = "wiki/" + wiki_id
+            entity = mochi.entity.info(wiki_id)
+            owner_id = entity.get("creator") if entity else None
+            if owner_id:
+                mochi.access.allow(owner_id, resource, "*", owner_id)
 
 # Helper: Update subscriber's seen timestamp
 def update_subscriber_seen(wiki, subscriber_id):
@@ -232,21 +240,8 @@ def remove_attachment_refs(content, attachment_id):
 
 # Helper: Fetch wiki info from a remote wiki via P2P stream
 def fetch_remote_wiki_info(a, wiki_id):
-    # Use the user's identity as the "from" header for the stream request
-    from_entity = ""
-    if a.user and a.user.identity:
-        from_entity = a.user.identity.id
-
-    stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    if not stream:
-        return {"error": "offline"}
-
-    dump = stream.read()
-    if not dump:
+    dump = mochi.remote.request(wiki_id, "sync", {})
+    if dump.get("error"):
         return {"error": "offline"}
 
     status = dump.get("status")
@@ -273,21 +268,8 @@ def fetch_remote_wiki_info(a, wiki_id):
 
 # Helper: Fetch a page from a remote wiki via P2P stream
 def fetch_remote_page(a, wiki_id, slug):
-    # Use the user's identity as the "from" header for the stream request
-    from_entity = ""
-    if a.user and a.user.identity:
-        from_entity = a.user.identity.id
-
-    stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    if not stream:
-        return {"error": "offline"}
-
-    dump = stream.read()
-    if not dump:
+    dump = mochi.remote.request(wiki_id, "sync", {})
+    if dump.get("error"):
         return {"error": "offline"}
 
     status = dump.get("status")
@@ -338,20 +320,8 @@ def fetch_remote_page(a, wiki_id, slug):
 
 # Helper: Fetch page history from a remote wiki via P2P stream
 def fetch_remote_page_history(a, wiki_id, slug):
-    from_entity = ""
-    if a.user and a.user.identity:
-        from_entity = a.user.identity.id
-
-    stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    if not stream:
-        return {"error": "offline"}
-
-    dump = stream.read()
-    if not dump:
+    dump = mochi.remote.request(wiki_id, "sync", {})
+    if dump.get("error"):
         return {"error": "offline"}
 
     status = dump.get("status")
@@ -414,10 +384,6 @@ def fetch_remote_page_history(a, wiki_id, slug):
 
 # Helper: Send a page edit request to a remote wiki via P2P stream
 def send_remote_page_edit(a, wiki_id):
-    from_entity = ""
-    if a.user and a.user.identity:
-        from_entity = a.user.identity.id
-
     slug = a.input("page")
     title = a.input("title")
     content = a.input("content")
@@ -428,23 +394,16 @@ def send_remote_page_edit(a, wiki_id):
     if not title:
         return {"error": "Title is required"}
 
-    stream = mochi.stream(
-        {"from": from_entity, "to": wiki_id, "service": "wikis", "event": "page/edit/request"},
-        {
-            "page": slug,
-            "title": title,
-            "content": content or "",
-            "comment": comment,
-            "author": from_entity,
-            "name": a.user.identity.name if a.user and a.user.identity else "",
-        }
-    )
-
-    if not stream:
-        return {"error": "offline"}
-
-    result = stream.read()
-    if not result:
+    from_entity = a.user.identity.id if a.user and a.user.identity else ""
+    result = mochi.remote.request(wiki_id, "page/edit/request", {
+        "page": slug,
+        "title": title,
+        "content": content or "",
+        "comment": comment,
+        "author": from_entity,
+        "name": a.user.identity.name if a.user and a.user.identity else "",
+    })
+    if result.get("error"):
         return {"error": "offline"}
 
     status = result.get("status")
@@ -543,17 +502,9 @@ def action_join(a):
         a.error(400, "Already joined this wiki")
         return
 
-    # Use the user's identity as the "from" header for the stream request
-    from_entity = a.user.identity.id if a.user.identity else ""
-
     # Sync data from the remote wiki first to get the name
-    stream = mochi.stream(
-        {"from": from_entity, "to": source, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    dump = stream.read()
-    if not dump or dump.get("status") != "200":
+    dump = mochi.remote.request(source, "sync", {})
+    if dump.get("error") or dump.get("status") != "200":
         a.error(500, "Failed to sync from remote wiki")
         return
 
@@ -613,17 +564,9 @@ def action_bookmark_add(a):
         a.error(400, "This wiki is already in your list")
         return
 
-    # Use the user's identity as the "from" header for the stream request
-    from_entity = a.user.identity.id if a.user.identity else ""
-
     # Fetch the wiki name from the remote
-    stream = mochi.stream(
-        {"from": from_entity, "to": target, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    dump = stream.read()
-    if not dump or dump.get("status") != "200":
+    dump = mochi.remote.request(target, "sync", {})
+    if dump.get("error") or dump.get("status") != "200":
         a.error(500, "Failed to fetch wiki info")
         return
 
@@ -1772,17 +1715,17 @@ def action_access_list(a):
     resource = "wiki/" + wiki["id"]
     rules = mochi.access.list.resource(resource)
 
-    # Filter and resolve names for rules
+    # Resolve names for rules and mark owner
     filtered_rules = []
     for rule in rules:
         subject = rule.get("subject", "")
-        # Skip owner rules (owner always has full access)
+        # Mark owner rules
         if owner and subject == owner.get("id"):
-            continue
+            rule["isOwner"] = True
         # Skip legacy #administrator rules
         if subject == "#administrator":
             continue
-        # Skip special subjects (*, +, #roles) for name resolution
+        # Resolve names for non-special subjects
         if subject and subject not in ("*", "+") and not subject.startswith("#"):
             if subject.startswith("@"):
                 # Look up group name
@@ -1801,7 +1744,7 @@ def action_access_list(a):
                         rule["name"] = entity.get("name", "")
         filtered_rules.append(rule)
 
-    return {"data": {"rules": filtered_rules, "owner": owner}}
+    return {"data": {"rules": filtered_rules}}
 
 # Set access level for a subject
 # Levels: "edit" (can edit, delete, view), "view" (can view only), "none" (explicitly blocked)
@@ -2734,18 +2677,9 @@ def action_sync(a):
         a.error(400, "No upstream wiki to sync from")
         return
 
-    # Use the user's identity as the "from" header for the stream request
-    from_entity = a.user.identity.id if a.user.identity else ""
-
-    # Open stream to target and request sync
-    stream = mochi.stream(
-        {"from": from_entity, "to": target, "service": "wikis", "event": "sync"},
-        {}
-    )
-
-    # Read the response
-    dump = stream.read()
-    if not dump:
+    # Request sync from target
+    dump = mochi.remote.request(target, "sync", {})
+    if dump.get("error") or not dump:
         a.error(500, "Failed to receive sync data")
         return
 
