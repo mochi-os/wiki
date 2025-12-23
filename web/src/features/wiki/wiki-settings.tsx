@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
-  Settings,
   Save,
   Trash2,
   Plus,
@@ -10,7 +9,7 @@ import {
   Shield,
   CornerDownRight,
   ArrowRight,
-  Home,
+  Settings,
   RefreshCw,
   Users,
 } from 'lucide-react'
@@ -78,7 +77,7 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: 'settings', label: 'Settings', icon: <Home className="h-4 w-4" /> },
+  { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
   { id: 'redirects', label: 'Redirects', icon: <CornerDownRight className="h-4 w-4" /> },
   { id: 'access', label: 'Access', icon: <Shield className="h-4 w-4" /> },
   { id: 'subscribers', label: 'Subscribers', icon: <Users className="h-4 w-4" /> },
@@ -89,12 +88,6 @@ export function WikiSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Settings className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Settings</h1>
-      </div>
-
       {/* Tabs */}
       <div className="flex gap-1 border-b">
         {tabs.map((tab) => (
@@ -288,7 +281,7 @@ function SettingsTab() {
         </CardContent>
       </Card>
 
-      <Card className="border-destructive/50">
+      <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-between">
             <div>
@@ -338,7 +331,6 @@ function AccessTab() {
   const { data: groupsData } = useGroups()
 
   const [rules, setRules] = useState<import('@/types/wiki').AccessRule[]>([])
-  const [owner, setOwner] = useState<import('@/types/wiki').AccessOwner | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
@@ -354,7 +346,6 @@ function AccessTab() {
         endpoints.wiki.access
       )
       setRules(response?.rules ?? [])
-      setOwner(response?.owner ?? null)
     } catch (err) {
       console.error('[AccessTab] Failed to load rules', err)
       setError(err instanceof Error ? err : new Error('Failed to load access rules'))
@@ -431,7 +422,6 @@ function AccessTab() {
           onRevoke={handleRevoke}
           isLoading={isLoading}
           error={error}
-          owner={owner}
         />
       </CardContent>
     </Card>

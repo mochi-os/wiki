@@ -208,14 +208,9 @@ export interface AccessRule {
   operation: string
   grant: number
   name?: string  // Resolved name for display
-}
-
-export interface AccessOwner {
-  id: string
-  name?: string
+  isOwner?: boolean  // True if this rule is for the resource owner
 }
 
 export interface AccessListResponse {
   rules: AccessRule[]
-  owner?: AccessOwner | null
 }
