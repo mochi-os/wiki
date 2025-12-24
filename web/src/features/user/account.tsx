@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import type { Passkey, TotpSetupResponse } from '@/types/account'
 import { startRegistration } from '@simplewebauthn/browser'
 import {

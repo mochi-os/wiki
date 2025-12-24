@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import type { User, Session } from '@/types/users'
 import {
   Ban,

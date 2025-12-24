@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { z } from 'zod'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { RevertPage } from '@/features/wiki/revert-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

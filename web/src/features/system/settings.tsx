@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SystemSetting } from '@/types/settings'
 import { Loader2, Lock, RotateCcw } from 'lucide-react'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { toast } from 'sonner'
 import { usePreferencesData } from '@/hooks/use-preferences'
 import {

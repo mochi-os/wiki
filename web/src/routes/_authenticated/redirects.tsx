@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { RedirectsPage } from '@/features/wiki/redirects-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

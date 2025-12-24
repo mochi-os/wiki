@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useChanges } from '@/hooks/use-wiki'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { ChangesList, ChangesListSkeleton } from '@/features/wiki/changes-list'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

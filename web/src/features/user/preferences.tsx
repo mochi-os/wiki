@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Check, ChevronsUpDown, Loader2, RotateCcw } from 'lucide-react'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { toast } from 'sonner'
 import { cn } from '@mochi/common'
 import { useTheme } from '@mochi/common'

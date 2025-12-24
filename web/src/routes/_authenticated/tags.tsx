@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useTags } from '@/hooks/use-wiki'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { TagsList, TagsListSkeleton } from '@/features/wiki/tags-list'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

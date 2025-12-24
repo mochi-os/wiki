@@ -1,7 +1,7 @@
 import { format } from 'date-fns'
 import { Activity } from 'lucide-react'
 import { useSystemSettingsData } from '@/hooks/use-system-settings'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { Skeleton } from '@mochi/common'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

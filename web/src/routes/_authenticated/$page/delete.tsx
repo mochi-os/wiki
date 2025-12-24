@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { usePage } from '@/hooks/use-wiki'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { DeletePage } from '@/features/wiki/delete-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

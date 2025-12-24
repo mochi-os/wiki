@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { usePage } from '@/hooks/use-wiki'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { PageEditor, PageEditorSkeleton } from '@/features/wiki/page-editor'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

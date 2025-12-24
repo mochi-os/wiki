@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { usePageRevision } from '@/hooks/use-wiki'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { RevisionView, RevisionViewSkeleton } from '@/features/wiki/revision-view'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'

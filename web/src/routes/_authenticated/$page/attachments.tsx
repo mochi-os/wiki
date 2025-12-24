@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { usePageTitle } from '@/hooks/usePageTitle'
+import { usePageTitle } from '@mochi/common'
 import { AttachmentsPage, AttachmentsPageSkeleton } from '@/features/wiki/attachments-page'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
