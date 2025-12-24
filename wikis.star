@@ -2408,14 +2408,16 @@ def event_page_delete_request(e):
         e.write({"status": "400", "error": "Page already deleted"})
         return
 
-    # Mark page as deleted
+    # Mark page as deleted with timestamp and increment version
     now = mochi.time.now()
-    mochi.db.execute("update pages set deleted=1, updated=? where id=?", now, page["id"])
+    version = page["version"] + 1
+    mochi.db.execute("update pages set deleted=?, version=?, updated=? where id=?", now, version, now, page["id"])
 
     # Broadcast delete event to subscribers
     broadcast_event(wiki, "page/delete", {
         "id": page["id"],
-        "page": slug,
+        "deleted": now,
+        "version": version,
     })
 
     e.write({"status": "200", "deleted": slug})
