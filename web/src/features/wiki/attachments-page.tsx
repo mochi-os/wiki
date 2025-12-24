@@ -5,9 +5,6 @@ import { toast } from 'sonner'
 import {
   Upload,
   Trash2,
-  Image,
-  FileText,
-  File,
   Copy,
   Check,
   Loader2,
@@ -18,16 +15,20 @@ import {
   ArrowLeft,
   X,
 } from 'lucide-react'
-import { Button, getApiBasepath } from '@mochi/common'
-import { Input } from '@mochi/common'
-import { Skeleton } from '@mochi/common'
-import { Separator } from '@mochi/common'
 import {
+  Button,
+  getApiBasepath,
+  Input,
+  Skeleton,
+  Separator,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  formatFileSize,
+  getFileIcon,
+  isImage,
 } from '@mochi/common'
 import {
   useAttachments,
@@ -43,22 +44,6 @@ interface AttachmentsPageProps {
 type ViewMode = 'grid' | 'list'
 type FilterType = 'all' | 'images' | 'documents'
 type SortBy = 'name' | 'date' | 'size'
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function getFileIcon(type: string) {
-  if (type.startsWith('image/')) return Image
-  if (type.startsWith('text/')) return FileText
-  return File
-}
-
-function isImage(type: string): boolean {
-  return type.startsWith('image/')
-}
 
 // Build attachment URL using API basepath for correct resolution from any route
 function getAttachmentUrl(id: string): string {

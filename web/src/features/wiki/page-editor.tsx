@@ -1,19 +1,22 @@
 import { useState, useRef } from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Save, X, Eye, Edit2, Image, Trash2, ImagePlus, File, FileText, Loader2 } from 'lucide-react'
-import { Button, getApiBasepath } from '@mochi/common'
-import { Input } from '@mochi/common'
-import { Textarea } from '@mochi/common'
-import { Label } from '@mochi/common'
-import { Separator } from '@mochi/common'
-import { Skeleton } from '@mochi/common'
+import { Save, X, Eye, Edit2, Trash2, ImagePlus, Loader2 } from 'lucide-react'
 import {
+  Button,
+  getApiBasepath,
+  Input,
+  Textarea,
+  Label,
+  Separator,
+  Skeleton,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  isImage,
+  getFileIcon,
 } from '@mochi/common'
 import { useEditPage, useCreatePage, useAttachments, useUploadAttachment } from '@/hooks/use-wiki'
 import { usePermissions } from '@/context/wiki-context'
@@ -24,18 +27,6 @@ interface PageEditorProps {
   page?: WikiPage
   slug: string
   isNew?: boolean
-}
-
-// Helper to check if attachment is an image
-function isImage(type: string): boolean {
-  return type.startsWith('image/')
-}
-
-// Get icon for file type
-function getFileIcon(type: string) {
-  if (type.startsWith('image/')) return Image
-  if (type.startsWith('text/')) return FileText
-  return File
 }
 
 // Build attachment URL using API basepath

@@ -1,17 +1,20 @@
 import { useState, useRef } from 'react'
 import { format } from 'date-fns'
-import { Upload, Trash2, Image, FileText, File, Copy, Check, Loader2 } from 'lucide-react'
-import { Button } from '@mochi/common'
+import { Upload, Trash2, Copy, Check, Loader2 } from 'lucide-react'
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  ScrollArea,
+  Skeleton,
+  formatFileSize,
+  getFileIcon,
+  isImage,
 } from '@mochi/common'
-import { ScrollArea } from '@mochi/common'
-import { Skeleton } from '@mochi/common'
 import {
   useAttachments,
   useUploadAttachment,
@@ -24,22 +27,6 @@ interface AttachmentPickerProps {
   onSelect?: (attachment: Attachment, markdown: string) => void
   onDelete?: (attachmentId: string) => void
   trigger?: React.ReactNode
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function getFileIcon(type: string) {
-  if (type.startsWith('image/')) return Image
-  if (type.startsWith('text/')) return FileText
-  return File
-}
-
-function isImage(type: string): boolean {
-  return type.startsWith('image/')
 }
 
 export function AttachmentPicker({ onSelect, onDelete, trigger }: AttachmentPickerProps) {
