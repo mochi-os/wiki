@@ -29,7 +29,7 @@ function JoinWikiPage() {
     }
     joinWiki.mutate(target.trim(), {
       onSuccess: () => {
-        toast.success('Wiki joined successfully')
+        toast.success('Joined wiki')
         navigate({ to: '/' })
       },
       onError: (error: Error) => {

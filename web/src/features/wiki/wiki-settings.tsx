@@ -159,7 +159,7 @@ function SettingsTab() {
   const handleSync = () => {
     syncWiki.mutate(undefined, {
       onSuccess: () => {
-        toast.success('Wiki synced successfully')
+        toast.success('Wiki synced')
       },
       onError: (error) => {
         toast.error(error.message || 'Failed to sync wiki')
