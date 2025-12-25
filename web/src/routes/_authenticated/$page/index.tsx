@@ -1,7 +1,7 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { usePage } from '@/hooks/use-wiki'
-import { usePageTitle } from '@mochi/common'
+import { Button, usePageTitle } from '@mochi/common'
 import {
   PageView,
   PageNotFound,
@@ -11,8 +11,9 @@ import { PageHeader } from '@/features/wiki/page-header'
 import { Header } from '@mochi/common'
 import { Main } from '@mochi/common'
 import { useSidebarContext } from '@/context/sidebar-context'
-import { useWikiContext } from '@/context/wiki-context'
+import { useWikiContext, usePermissions } from '@/context/wiki-context'
 import { setLastLocation } from '@/hooks/use-wiki-storage'
+import { History, Pencil } from 'lucide-react'
 
 export const Route = createFileRoute('/_authenticated/$page/')({
   component: WikiPageRoute,
@@ -23,6 +24,7 @@ function WikiPageRoute() {
   const slug = params.page
   const { data, isLoading, error } = usePage(slug)
   const { info } = useWikiContext()
+  const permissions = usePermissions()
   const pageTitle = data && 'page' in data && typeof data.page === 'object' && data.page?.title ? data.page.title : slug
   usePageTitle(pageTitle)
 
@@ -86,6 +88,23 @@ function WikiPageRoute() {
           <PageHeader page={data.page} />
         </Header>
         <Main>
+          {/* Action buttons */}
+          <div className="-mt-1 flex justify-end gap-2 mb-4">
+            {permissions.edit && (
+              <Button asChild>
+                <Link to="/$page/edit" params={{ page: slug }}>
+                  <Pencil className="size-4" />
+                  Edit
+                </Link>
+              </Button>
+            )}
+            <Button variant="outline" asChild>
+              <Link to="/$page/history" params={{ page: slug }}>
+                <History className="size-4" />
+                History
+              </Link>
+            </Button>
+          </div>
           <PageView page={data.page} />
         </Main>
       </>

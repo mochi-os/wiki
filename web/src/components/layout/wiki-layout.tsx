@@ -19,7 +19,6 @@ import {
   FilePlus,
   History,
   Library,
-  Pencil,
   Plus,
   Search,
   Settings,
@@ -100,24 +99,11 @@ function WikiLayoutInner() {
     // Use URL-based entity ID as fallback when wiki context is temporarily unavailable
     const currentWikiId = info?.wiki?.id || urlEntityId
 
-    // Build page sub-item with Edit and History (nested collapsible)
+    // Build page sub-item (just a link to the current page)
     const pageSubItem = pageSlug ? {
       title: pageTitle || pageSlug,
       url: `/${pageSlug}` as const,
       icon: FilePlus,
-      items: [
-        ...(permissions.edit ? [{
-          title: 'Edit',
-          url: `/${pageSlug}/edit` as const,
-          icon: Pencil,
-        }] : []),
-        {
-          title: 'History',
-          url: `/${pageSlug}/history` as const,
-          icon: History,
-        },
-      ],
-      open: true, // Page submenu always open when viewing a page
     } : null
 
     // Build wiki sub-items: current page, new page, then settings at bottom
