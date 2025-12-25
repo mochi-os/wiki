@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Link } from '@tanstack/react-router'
-import { cn, ImageLightbox, type LightboxMedia } from '@mochi/common'
+import { cn, ImageLightbox, type LightboxMedia, useLightboxHash } from '@mochi/common'
 import { getApiBasepath } from '@mochi/common'
 
 // Check if URL is an attachment URL
@@ -42,12 +42,14 @@ interface MarkdownContentProps {
 }
 
 export function MarkdownContent({ content, className }: MarkdownContentProps) {
-  const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [currentIndex, setCurrentIndex] = useState(0)
-
   // Collect images during render for the lightbox gallery
+  const [images, setImages] = useState<LightboxMedia[]>([])
   const imagesRef = useRef<LightboxMedia[]>([])
   const imageIndexRef = useRef(0)
+
+  // Use hash-based lightbox state for shareable URLs and back button support
+  const { open, currentIndex, openLightbox, closeLightbox, setCurrentIndex } =
+    useLightboxHash(images)
 
   // Reset image collection when content changes
   useEffect(() => {
@@ -55,13 +57,15 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
     imageIndexRef.current = 0
   }, [content])
 
+  // Sync collected images to state after render
+  useEffect(() => {
+    if (imagesRef.current.length > 0 && imagesRef.current.length !== images.length) {
+      setImages([...imagesRef.current])
+    }
+  })
+
   // Reset index counter before each render
   imageIndexRef.current = 0
-
-  const openLightbox = useCallback((index: number) => {
-    setCurrentIndex(index)
-    setLightboxOpen(true)
-  }, [])
 
   return (
     <>
@@ -148,10 +152,10 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       </div>
 
       <ImageLightbox
-        images={imagesRef.current}
+        images={images}
         currentIndex={currentIndex}
-        open={lightboxOpen}
-        onOpenChange={setLightboxOpen}
+        open={open}
+        onOpenChange={(isOpen) => !isOpen && closeLightbox()}
         onIndexChange={setCurrentIndex}
       />
     </>
