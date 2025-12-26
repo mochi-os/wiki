@@ -1,5 +1,6 @@
 import { format } from 'date-fns'
 import { Edit, FileQuestion } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
 import { Button } from '@mochi/common'
 import { Skeleton } from '@mochi/common'
 import { Separator } from '@mochi/common'
@@ -44,10 +45,10 @@ export function PageNotFound({ slug }: PageNotFoundProps) {
       </p>
       {permissions.edit && (
         <Button asChild>
-          <a href={`new?slug=${encodeURIComponent(slug)}`}>
+          <Link to="/new" search={{ slug }}>
             <Edit className="mr-2 h-4 w-4" />
             Create this page
-          </a>
+          </Link>
         </Button>
       )}
     </div>
