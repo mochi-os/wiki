@@ -5,33 +5,33 @@
 
 def database_create():
     # Wikis table - source is the upstream wiki entity ID for joined wikis
-    mochi.db.execute("create table wikis (id text primary key, name text not null, home text not null default 'home', source text not null default '', created integer not null)")
+    mochi.db.execute("create table if not exists wikis (id text primary key, name text not null, home text not null default 'home', source text not null default '', created integer not null)")
 
     # Pages table
-    mochi.db.execute("create table pages (id text primary key, wiki text not null references wikis(id), page text not null, title text not null, content text not null, author text not null, created integer not null, updated integer not null, version integer not null default 1, deleted integer not null default 0)")
-    mochi.db.execute("create unique index pages_wiki_page on pages(wiki, page)")
-    mochi.db.execute("create index pages_wiki on pages(wiki)")
-    mochi.db.execute("create index pages_updated on pages(updated)")
-    mochi.db.execute("create index pages_author on pages(author)")
+    mochi.db.execute("create table if not exists pages (id text primary key, wiki text not null references wikis(id), page text not null, title text not null, content text not null, author text not null, created integer not null, updated integer not null, version integer not null default 1, deleted integer not null default 0)")
+    mochi.db.execute("create unique index if not exists pages_wiki_page on pages(wiki, page)")
+    mochi.db.execute("create index if not exists pages_wiki on pages(wiki)")
+    mochi.db.execute("create index if not exists pages_updated on pages(updated)")
+    mochi.db.execute("create index if not exists pages_author on pages(author)")
 
     # Revisions table
-    mochi.db.execute("create table revisions (id text primary key, page text not null references pages(id), content text not null, title text not null, author text not null, name text not null default '', created integer not null, version integer not null, comment text not null default '')")
-    mochi.db.execute("create index revisions_page on revisions(page)")
-    mochi.db.execute("create index revisions_created on revisions(created)")
+    mochi.db.execute("create table if not exists revisions (id text primary key, page text not null references pages(id), content text not null, title text not null, author text not null, name text not null default '', created integer not null, version integer not null, comment text not null default '')")
+    mochi.db.execute("create index if not exists revisions_page on revisions(page)")
+    mochi.db.execute("create index if not exists revisions_created on revisions(created)")
 
     # Tags table
-    mochi.db.execute("create table tags (page text not null references pages(id), tag text not null, primary key (page, tag))")
-    mochi.db.execute("create index tags_tag on tags(tag)")
+    mochi.db.execute("create table if not exists tags (page text not null references pages(id), tag text not null, primary key (page, tag))")
+    mochi.db.execute("create index if not exists tags_tag on tags(tag)")
 
     # Redirects table
-    mochi.db.execute("create table redirects (wiki text not null references wikis(id), source text not null, target text not null, created integer not null, primary key (wiki, source))")
+    mochi.db.execute("create table if not exists redirects (wiki text not null references wikis(id), source text not null, target text not null, created integer not null, primary key (wiki, source))")
 
     # Subscribers table
-    mochi.db.execute("create table subscribers (wiki text not null references wikis(id), id text not null, name text not null default '', subscribed integer not null, seen integer not null default 0, primary key (wiki, id))")
+    mochi.db.execute("create table if not exists subscribers (wiki text not null references wikis(id), id text not null, name text not null default '', subscribed integer not null, seen integer not null default 0, primary key (wiki, id))")
 
     # Bookmarks table - for following external wikis without making a local copy
-    mochi.db.execute("create table bookmarks (id text primary key, name text not null, added integer not null)")
-    mochi.db.execute("create index bookmarks_added on bookmarks(added)")
+    mochi.db.execute("create table if not exists bookmarks (id text primary key, name text not null, added integer not null)")
+    mochi.db.execute("create index if not exists bookmarks_added on bookmarks(added)")
 
 # Database upgrades
 
@@ -44,8 +44,8 @@ def database_upgrade(version):
         mochi.db.execute("alter table revisions add column name text not null default ''")
     elif version == 4:
         # Add bookmarks table for following external wikis
-        mochi.db.execute("create table bookmarks (id text primary key, name text not null, added integer not null)")
-        mochi.db.execute("create index bookmarks_added on bookmarks(added)")
+        mochi.db.execute("create table if not exists bookmarks (id text primary key, name text not null, added integer not null)")
+        mochi.db.execute("create index if not exists bookmarks_added on bookmarks(added)")
     elif version == 5:
         # Add seen column to track subscriber activity
         mochi.db.execute("alter table subscribers add column seen integer not null default 0")
