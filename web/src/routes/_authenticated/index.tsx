@@ -21,9 +21,9 @@ import { cacheWikisList, setLastLocation } from '@/hooks/use-wiki-storage'
 
 interface InfoResponse {
   entity: boolean
-  wiki?: { id: string; name: string; home: string }
-  wikis?: Array<{ id: string; name: string; home: string; source?: string }>
-  bookmarks?: Array<{ id: string; name: string; added: number }>
+  wiki?: { id: string; name: string; home: string; fingerprint?: string }
+  wikis?: Array<{ id: string; name: string; home: string; source?: string; fingerprint?: string }>
+  bookmarks?: Array<{ id: string; name: string; added: number; fingerprint?: string }>
 }
 
 type WikiType = 'owned' | 'subscribed' | 'bookmarked'
@@ -32,6 +32,7 @@ interface WikiItem {
   id: string
   name: string
   type: WikiType
+  fingerprint?: string
 }
 
 export const Route = createFileRoute('/_authenticated/')({
@@ -137,8 +138,8 @@ function WikiHomePage({ wikiId, homeSlug }: { wikiId: string; homeSlug: string }
 }
 
 interface WikisListPageProps {
-  wikis?: Array<{ id: string; name: string; home: string; source?: string }>
-  bookmarks?: Array<{ id: string; name: string; added: number }>
+  wikis?: Array<{ id: string; name: string; home: string; source?: string; fingerprint?: string }>
+  bookmarks?: Array<{ id: string; name: string; added: number; fingerprint?: string }>
 }
 
 function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
@@ -162,11 +163,13 @@ function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
       id: w.id,
       name: w.name,
       type: (w.source ? 'subscribed' : 'owned') as WikiType,
+      fingerprint: w.fingerprint,
     })),
     ...(bookmarks || []).map((b) => ({
       id: b.id,
       name: b.name,
       type: 'bookmarked' as WikiType,
+      fingerprint: b.fingerprint,
     })),
   ].sort((a, b) => a.name.localeCompare(b.name))
 
@@ -199,7 +202,7 @@ function WikisListPage({ wikis, bookmarks }: WikisListPageProps) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {allWikis.map((wiki) => (
             <Card key={wiki.id} className="transition-colors hover:bg-highlight relative">
-              <a href={`${getAppPath()}/${wiki.id}`} className="block">
+              <a href={`${getAppPath()}/${wiki.fingerprint ?? wiki.id}`} className="block">
                 <CardHeader className="flex items-center justify-center py-8">
                   <CardTitle className="flex items-center gap-2 text-xl">
                     {getIcon(wiki.type)}

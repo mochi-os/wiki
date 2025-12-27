@@ -664,8 +664,11 @@ def action_root(a):
 
 # Info endpoint for class context - returns list of wikis
 def action_info_class(a):
-    wikis = mochi.db.rows("select id, name, home, source, created from wikis order by name")
-    bookmarks = mochi.db.rows("select id, name, added from bookmarks order by name")
+    # Add fingerprint (without hyphens) to each for shorter URLs
+    wikis_raw = mochi.db.rows("select id, name, home, source, created from wikis order by name")
+    wikis = [dict(w, fingerprint=mochi.entity.fingerprint(w["id"], False)) for w in wikis_raw]
+    bookmarks_raw = mochi.db.rows("select id, name, added from bookmarks order by name")
+    bookmarks = [dict(b, fingerprint=mochi.entity.fingerprint(b["id"], False)) for b in bookmarks_raw]
     return {"data": {"entity": False, "wikis": wikis, "bookmarks": bookmarks}}
 
 # Info endpoint for entity context - returns wiki info
@@ -748,8 +751,11 @@ def action_info_entity(a):
     fp = mochi.entity.fingerprint(wiki["id"], True)
 
     # Also include all wikis and bookmarks for sidebar display
-    wikis = mochi.db.rows("select id, name, home, source, created from wikis order by name")
-    bookmarks = mochi.db.rows("select id, name, added from bookmarks order by name")
+    # Add fingerprint (without hyphens) to each for shorter URLs
+    wikis_raw = mochi.db.rows("select id, name, home, source, created from wikis order by name")
+    wikis = [dict(w, fingerprint=mochi.entity.fingerprint(w["id"], False)) for w in wikis_raw]
+    bookmarks_raw = mochi.db.rows("select id, name, added from bookmarks order by name")
+    bookmarks = [dict(b, fingerprint=mochi.entity.fingerprint(b["id"], False)) for b in bookmarks_raw]
 
     return {"data": {"entity": True, "wiki": wiki, "wikis": wikis, "bookmarks": bookmarks, "permissions": permissions, "fingerprint": fp}}
 

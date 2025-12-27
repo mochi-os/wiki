@@ -119,12 +119,14 @@ function WikiLayoutInner() {
 
     // Build wiki items from the list (when in class context)
     // Only expand current wiki when not on a utility page
+    // Use fingerprint for shorter URLs when available
     const wikiItems = (info?.wikis || []).map((wiki) => {
-      const isCurrentWiki = currentWikiId === wiki.id
+      const isCurrentWiki = currentWikiId === wiki.id || currentWikiId === wiki.fingerprint
       const shouldExpand = isCurrentWiki && !isUtilityPage
+      const wikiUrl = wiki.fingerprint ?? wiki.id
       return {
         title: wiki.name,
-        url: `${getAppPath()}/${wiki.id}` as const,
+        url: `${getAppPath()}/${wikiUrl}` as const,
         icon: BookOpen,
         external: true,
         items: isCurrentWiki ? buildWikiSubItems() : [],
@@ -132,17 +134,17 @@ function WikiLayoutInner() {
       }
     }).sort((a, b) => a.title.localeCompare(b.title))
 
-    // Build bookmarked wiki items
+    // Build bookmarked wiki items - use fingerprint for shorter URLs
     const bookmarkItems = (info?.bookmarks || []).map((bookmark) => ({
       title: bookmark.name,
-      url: `${getAppPath()}/${bookmark.id}` as const,
+      url: `${getAppPath()}/${bookmark.fingerprint ?? bookmark.id}` as const,
       icon: Bookmark,
       external: true,
     })).sort((a, b) => a.title.localeCompare(b.title))
 
     // Build current wiki item when in entity context but not in the wikis list
     // (This handles when we're viewing a wiki that might not be in our class list)
-    const currentWikiInList = info?.wikis?.some(w => w.id === currentWikiId)
+    const currentWikiInList = info?.wikis?.some(w => w.id === currentWikiId || w.fingerprint === currentWikiId)
     const standaloneWikiItem = isInWiki && !currentWikiInList ? {
       title: wikiName || 'Wiki',
       url: APP_ROUTES.WIKI.HOME,

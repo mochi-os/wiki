@@ -32,9 +32,9 @@ import { requestHelpers } from '@mochi/common'
 
 export interface WikiInfoResponse {
   entity: boolean
-  wiki?: { id: string; name: string; home: string }
-  wikis?: Array<{ id: string; name: string; home: string; source?: string }>
-  bookmarks?: Array<{ id: string; name: string; added: number }>
+  wiki?: { id: string; name: string; home: string; fingerprint?: string }
+  wikis?: Array<{ id: string; name: string; home: string; source?: string; fingerprint?: string }>
+  bookmarks?: Array<{ id: string; name: string; added: number; fingerprint?: string }>
   permissions?: WikiPermissions
   fingerprint?: string
 }
