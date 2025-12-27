@@ -240,7 +240,7 @@ def remove_attachment_refs(content, attachment_id):
 
 # Helper: Fetch wiki info from a remote wiki via P2P stream
 def fetch_remote_wiki_info(a, wiki_id):
-    dump = mochi.remote.request(wiki_id, "sync", {})
+    dump = mochi.remote.request(wiki_id, "wikis", "sync", {})
     if dump.get("error"):
         return {"error": "offline"}
 
@@ -268,7 +268,7 @@ def fetch_remote_wiki_info(a, wiki_id):
 
 # Helper: Fetch a page from a remote wiki via P2P stream
 def fetch_remote_page(a, wiki_id, slug):
-    dump = mochi.remote.request(wiki_id, "sync", {})
+    dump = mochi.remote.request(wiki_id, "wikis", "sync", {})
     if dump.get("error"):
         return {"error": "offline"}
 
@@ -320,7 +320,7 @@ def fetch_remote_page(a, wiki_id, slug):
 
 # Helper: Fetch page history from a remote wiki via P2P stream
 def fetch_remote_page_history(a, wiki_id, slug):
-    dump = mochi.remote.request(wiki_id, "sync", {})
+    dump = mochi.remote.request(wiki_id, "wikis", "sync", {})
     if dump.get("error"):
         return {"error": "offline"}
 
@@ -395,7 +395,7 @@ def send_remote_page_edit(a, wiki_id):
         return {"error": "Title is required"}
 
     from_entity = a.user.identity.id if a.user and a.user.identity else ""
-    result = mochi.remote.request(wiki_id, "page/edit/request", {
+    result = mochi.remote.request(wiki_id, "wikis", "page/edit/request", {
         "page": slug,
         "title": title,
         "content": content or "",
@@ -503,7 +503,7 @@ def action_join(a):
         return
 
     # Sync data from the remote wiki first to get the name
-    dump = mochi.remote.request(source, "sync", {})
+    dump = mochi.remote.request(source, "wikis", "sync", {})
     if dump.get("error") or dump.get("status") != "200":
         a.error(500, "Failed to sync from remote wiki")
         return
@@ -565,7 +565,7 @@ def action_bookmark_add(a):
         return
 
     # Fetch the wiki name from the remote
-    dump = mochi.remote.request(target, "sync", {})
+    dump = mochi.remote.request(target, "wikis", "sync", {})
     if dump.get("error") or dump.get("status") != "200":
         a.error(500, "Failed to fetch wiki info")
         return
@@ -2785,7 +2785,7 @@ def action_sync(a):
         return
 
     # Request sync from target
-    dump = mochi.remote.request(target, "sync", {})
+    dump = mochi.remote.request(target, "wikis", "sync", {})
     if dump.get("error") or not dump:
         a.error(500, "Failed to receive sync data")
         return
